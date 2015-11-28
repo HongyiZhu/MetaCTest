@@ -58,13 +58,15 @@ public class ForegroundService extends Service implements ServiceConnection{
     public static boolean IS_SERVICE_RUNNING = false;
 
     private void initParams() {
+//        At Joshua's place
+//        SENSOR_MAC.add("C7:1C:99:0F:9D:00"); //RG
+
 //        SENSOR_MAC.add("D7:06:C0:09:F7:7F"); //R
-        SENSOR_MAC.add("E1:B1:1A:7D:8C:35"); //RG
 //        SENSOR_MAC.add("F6:E0:22:68:49:AF"); //R
+        SENSOR_MAC.add("E1:B1:1A:7D:8C:35"); //RG
+        SENSOR_MAC.add("F2:9F:9C:02:AF:65"); //RG
         SENSOR_MAC.add("F5:AB:48:BC:10:6B"); //RPro
         SENSOR_MAC.add("EA:B2:F1:47:04:E7"); //RPro
-//        SENSOR_MAC.add("C7:1C:99:0F:9D:00"); //RG
-        SENSOR_MAC.add("F2:9F:9C:02:AF:65"); //RG
 
 //        4 Sensors for demo
 //        SENSOR_MAC.add("DB:D1:AD:E3:E9:C3"); //RG
