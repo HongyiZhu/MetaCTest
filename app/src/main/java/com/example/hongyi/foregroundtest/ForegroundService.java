@@ -63,16 +63,16 @@ public class ForegroundService extends Service implements ServiceConnection{
 
 //        SENSOR_MAC.add("D7:06:C0:09:F7:7F"); //R
 //        SENSOR_MAC.add("F6:E0:22:68:49:AF"); //R
-        SENSOR_MAC.add("E1:B1:1A:7D:8C:35"); //RG
-        SENSOR_MAC.add("F2:9F:9C:02:AF:65"); //RG
-        SENSOR_MAC.add("F5:AB:48:BC:10:6B"); //RPro
-        SENSOR_MAC.add("EA:B2:F1:47:04:E7"); //RPro
+//        SENSOR_MAC.add("E1:B1:1A:7D:8C:35"); //RG
+//        SENSOR_MAC.add("F2:9F:9C:02:AF:65"); //RG
+//        SENSOR_MAC.add("F5:AB:48:BC:10:6B"); //RPro
+//        SENSOR_MAC.add("EA:B2:F1:47:04:E7"); //RPro
 
 //        4 Sensors for demo
-//        SENSOR_MAC.add("DB:D1:AD:E3:E9:C3"); //RG
-//        SENSOR_MAC.add("F2:50:71:B0:AE:E1"); //RG
-//        SENSOR_MAC.add("DF:1C:5C:3F:F2:39"); //RG
-//        SENSOR_MAC.add("D4:CC:1A:AE:D4:FB"); //RG
+        SENSOR_MAC.add("DB:D1:AD:E3:E9:C3"); //RG
+        SENSOR_MAC.add("F2:50:71:B0:AE:E1"); //RG
+        SENSOR_MAC.add("DF:1C:5C:3F:F2:39"); //RG
+        SENSOR_MAC.add("D4:CC:1A:AE:D4:FB"); //RG
     }
 
 
