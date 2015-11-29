@@ -51,6 +51,7 @@ import java.util.List;
 
 public class ForegroundService extends Service implements ServiceConnection{
     private static final String LOG_TAG = "ForegroundService", LOG_ERR = "http_err";
+    private static final String BROADCAST_TAG = Constants.NOTIFICATION_ID.BROADCAST_TAG;
     private MetaWearBleService.LocalBinder ServiceBinder;
     private final ArrayList<String> SENSOR_MAC = new ArrayList<>();
     private final ArrayList<BoardObject> boards = new ArrayList<>();
@@ -322,6 +323,7 @@ public class ForegroundService extends Service implements ServiceConnection{
         public boolean ActiveDisconnect = false;
         private final String devicename;
         public String sensor_status;
+        private long temperature_timestamp;
 
         public ArrayList<String> filtering(ArrayList<String> dataCache, int thres, int interval) {
             ArrayList<String> filteredCache = new ArrayList<String> ();
@@ -362,6 +364,7 @@ public class ForegroundService extends Service implements ServiceConnection{
             this.sampleInterval = 1000 / sampleFreq;
             this.devicename = MAC_ADDRESS.replace(":", "");
             this.sensor_status = CONNECTING;
+            this.temperature_timestamp = 0;
             final String SENSOR_DATA_LOG = "Data:Sensor:" + MAC_ADDRESS;
 
             this.board.setConnectionStateHandler(new MetaWearBoard.ConnectionStateHandler() {
@@ -423,10 +426,13 @@ public class ForegroundService extends Service implements ServiceConnection{
                                             @Override
                                             public void process(Message message) {
                                                 long timestamp = System.currentTimeMillis();
-                                                double ts_in_sec = timestamp / 1000.0;
-                                                String jsonstr = getJSON(devicename, String.format("%.3f", ts_in_sec), String.format("%.3f", message.getData(Float.class)));
-                                                postTempAsync task = new postTempAsync();
-                                                task.execute(jsonstr);
+                                                if (timestamp - temperature_timestamp >= 50000) {
+                                                    temperature_timestamp = timestamp;
+                                                    double ts_in_sec = timestamp / 1000.0;
+                                                    String jsonstr = getJSON(devicename, String.format("%.3f", ts_in_sec), String.format("%.3f", message.getData(Float.class)));
+                                                    postTempAsync task = new postTempAsync();
+                                                    task.execute(jsonstr);
+                                                }
                                             }
                                         });
 
@@ -460,6 +466,7 @@ public class ForegroundService extends Service implements ServiceConnection{
 
                 @Override
                 public void disconnected() {
+
                     if (dataCache.size() != 0) {
                         ArrayList<String> temp = new ArrayList<String> (dataCache);
                         dataCache.clear();

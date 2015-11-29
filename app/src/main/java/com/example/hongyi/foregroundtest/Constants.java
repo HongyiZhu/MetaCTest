@@ -15,5 +15,6 @@ public class Constants {
 
     public interface NOTIFICATION_ID {
         public static int FOREGROUND_SERVICE = 101;
+        public static String BROADCAST_TAG = "com.marothiatechs.foregroundservice.action.broadcast";
     }
 }
