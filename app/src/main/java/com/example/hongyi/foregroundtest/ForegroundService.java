@@ -3,14 +3,21 @@ package com.example.hongyi.foregroundtest;
 /**
  * Created by Hongyi on 11/9/2015.
  */
+import android.annotation.TargetApi;
 import android.app.Notification;
 import android.app.PendingIntent;
+import android.app.ProgressDialog;
 import android.app.Service;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothManager;
+import android.bluetooth.le.ScanCallback;
+import android.bluetooth.le.ScanFilter;
+import android.bluetooth.le.ScanResult;
+import android.bluetooth.le.ScanSettings;
 import android.content.ComponentName;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.graphics.Bitmap;
@@ -18,7 +25,10 @@ import android.graphics.BitmapFactory;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.AsyncTask;
+import android.os.Handler;
+import android.os.Build;
 import android.os.IBinder;
+import android.os.ParcelUuid;
 import android.support.v7.app.NotificationCompat;
 import android.util.Log;
 import android.widget.Toast;
@@ -45,17 +55,37 @@ import java.io.OutputStreamWriter;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.lang.Math;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.UUID;
 
 public class ForegroundService extends Service implements ServiceConnection{
     private static final String LOG_TAG = "ForegroundService", LOG_ERR = "http_err";
+    private static final String BROADCAST_TAG = Constants.NOTIFICATION_ID.BROADCAST_TAG;
     private MetaWearBleService.LocalBinder ServiceBinder;
     private final ArrayList<String> SENSOR_MAC = new ArrayList<>();
     private final ArrayList<BoardObject> boards = new ArrayList<>();
+    private MetaWearBoard mwBoard;
+    private BluetoothAdapter btAdapter;
+    private boolean isScanning= false;
+    private HashSet<UUID> filterServiceUuids;
+    private ArrayList<ScanFilter> api21ScanFilters;
+    private final static UUID[] serviceUuids;
 
     public static boolean IS_SERVICE_RUNNING = false;
+
+    static {
+        serviceUuids= new UUID[] {
+                MetaWearBoard.METAWEAR_SERVICE_UUID,
+                MetaWearBoard.METABOOT_SERVICE_UUID
+        };
+    }
+
 
     private void initParams() {
 //        At Joshua's place
@@ -63,16 +93,16 @@ public class ForegroundService extends Service implements ServiceConnection{
 
 //        SENSOR_MAC.add("D7:06:C0:09:F7:7F"); //R
 //        SENSOR_MAC.add("F6:E0:22:68:49:AF"); //R
-        SENSOR_MAC.add("E1:B1:1A:7D:8C:35"); //RG
-        SENSOR_MAC.add("F2:9F:9C:02:AF:65"); //RG
-        SENSOR_MAC.add("F5:AB:48:BC:10:6B"); //RPro
-        SENSOR_MAC.add("EA:B2:F1:47:04:E7"); //RPro
+//        SENSOR_MAC.add("E1:B1:1A:7D:8C:35"); //RG
+//        SENSOR_MAC.add("F2:9F:9C:02:AF:65"); //RG
+//        SENSOR_MAC.add("F5:AB:48:BC:10:6B"); //RPro
+//        SENSOR_MAC.add("EA:B2:F1:47:04:E7"); //RPro
 
 //        4 Sensors for demo
-//        SENSOR_MAC.add("DB:D1:AD:E3:E9:C3"); //RG
-//        SENSOR_MAC.add("F2:50:71:B0:AE:E1"); //RG
-//        SENSOR_MAC.add("DF:1C:5C:3F:F2:39"); //RG
-//        SENSOR_MAC.add("D4:CC:1A:AE:D4:FB"); //RG
+        SENSOR_MAC.add("DB:D1:AD:E3:E9:C3"); //RG Fridge
+        SENSOR_MAC.add("F2:50:71:B0:AE:E1"); //RG Front door
+        SENSOR_MAC.add("DF:1C:5C:3F:F2:39"); //RG Bath door
+        SENSOR_MAC.add("D4:CC:1A:AE:D4:FB"); //RG Body
     }
 
 
@@ -146,14 +176,121 @@ public class ForegroundService extends Service implements ServiceConnection{
         return null;
     }
 
+    private BluetoothAdapter.LeScanCallback deprecatedScanCallback= null;
+    private ScanCallback api21ScallCallback= null;
+
+    @TargetApi(22)
+    public void startBleScan() {
+        isScanning= true;
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
+            filterServiceUuids = new HashSet<>();
+        } else {
+            api21ScanFilters= new ArrayList<>();
+        }
+
+        if (serviceUuids != null) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
+                filterServiceUuids.addAll(Arrays.asList(serviceUuids));
+            } else {
+                for (UUID uuid : serviceUuids) {
+                    api21ScanFilters.add(new ScanFilter.Builder().setServiceUuid(new ParcelUuid(uuid)).build());
+                }
+            }
+        }
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
+            ///< TODO: Use startScan method instead from API 21
+            deprecatedScanCallback= new BluetoothAdapter.LeScanCallback() {
+                private void foundDevice(final BluetoothDevice btDevice, final int rssi) {
+
+                }
+                @Override
+                public void onLeScan(BluetoothDevice bluetoothDevice, int rssi, byte[] scanRecord) {
+                    ///< Service UUID parsing code taking from stack overflow= http://stackoverflow.com/a/24539704
+
+                    ByteBuffer buffer= ByteBuffer.wrap(scanRecord).order(ByteOrder.LITTLE_ENDIAN);
+                    boolean stop= false;
+                    while (!stop && buffer.remaining() > 2) {
+                        byte length = buffer.get();
+                        if (length == 0) break;
+
+                        byte type = buffer.get();
+                        switch (type) {
+                            case 0x02: // Partial list of 16-bit UUIDs
+                            case 0x03: // Complete list of 16-bit UUIDs
+                                while (length >= 2) {
+                                    UUID serviceUUID= UUID.fromString(String.format("%08x-0000-1000-8000-00805f9b34fb", buffer.getShort()));
+                                    stop= filterServiceUuids.isEmpty() || filterServiceUuids.contains(serviceUUID);
+                                    if (stop) {
+                                        foundDevice(bluetoothDevice, rssi);
+                                    }
+
+                                    length -= 2;
+                                }
+                                break;
+
+                            case 0x06: // Partial list of 128-bit UUIDs
+                            case 0x07: // Complete list of 128-bit UUIDs
+                                while (!stop && length >= 16) {
+                                    long lsb= buffer.getLong(), msb= buffer.getLong();
+                                    stop= filterServiceUuids.isEmpty() || filterServiceUuids.contains(new UUID(msb, lsb));
+                                    if (stop) {
+                                        foundDevice(bluetoothDevice, rssi);
+                                    }
+                                    length -= 16;
+                                }
+                                break;
+
+                            default:
+                                buffer.position(buffer.position() + length - 1);
+                                break;
+                        }
+                    }
+
+                    if (!stop && filterServiceUuids.isEmpty()) {
+                        foundDevice(bluetoothDevice, rssi);
+                    }
+                }
+            };
+            btAdapter.startLeScan(deprecatedScanCallback);
+        } else {
+            api21ScallCallback= new ScanCallback() {
+                @Override
+                public void onScanResult(int callbackType, final ScanResult result) {
+
+
+                    super.onScanResult(callbackType, result);
+                }
+            };
+            btAdapter.getBluetoothLeScanner().startScan(api21ScanFilters, new ScanSettings.Builder().build(), api21ScallCallback);
+        }
+    }
+
+    public void stopBleScan() {
+        if (isScanning) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
+                ///< TODO: Use stopScan method instead from API 21
+                btAdapter.stopLeScan(deprecatedScanCallback);
+            } else {
+                btAdapter.getBluetoothLeScanner().stopScan(api21ScallCallback);
+            }
+            isScanning= false;
+        }
+    }
+
+
     @Override
     public void onServiceConnected(ComponentName name, IBinder service) {
         ServiceBinder = (MetaWearBleService.LocalBinder) service;
+
+        btAdapter = ((BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE)).getAdapter();
 
         BluetoothAdapter btAdapter = ((BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE)).getAdapter();
         if (!btAdapter.isEnabled()) {
             btAdapter.enable();
         }
+
         while (!btAdapter.isEnabled()) {
             try {
                 Thread.sleep(1000);
@@ -162,7 +299,16 @@ public class ForegroundService extends Service implements ServiceConnection{
             }
         }
 
-        Log.i(LOG_TAG, "BT enabled");
+        startBleScan();
+
+        try {
+            Thread.sleep(10000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+        stopBleScan();
+
 
         for (int i = 0; i < SENSOR_MAC.size(); i++){
             BluetoothDevice btDevice = btAdapter.getRemoteDevice(SENSOR_MAC.get(i));
@@ -171,14 +317,18 @@ public class ForegroundService extends Service implements ServiceConnection{
         }
 
         for (int i = 0; i < SENSOR_MAC.size();i++){
-            try {
-                Thread.sleep(7000);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-            boards.get(i).sensor_status = boards.get(i).CONNECTING;
+            BoardObject b = boards.get(i);
+            b.sensor_status = b.CONNECTING;
+            b.broadcastStatus();
 //            changeText(boards.get(i).MAC_ADDRESS, boards.get(i).CONNECTING);
-            boards.get(i).board.connect();
+            b.board.connect();
+//            while (!b.sensor_status.equals(b.CONNECTED)) {
+//                try {
+//                    Thread.sleep(1000);
+//                } catch (InterruptedException e) {
+//                    e.printStackTrace();
+//                }
+//            }
         }
     }
 
@@ -322,6 +472,7 @@ public class ForegroundService extends Service implements ServiceConnection{
         public boolean ActiveDisconnect = false;
         private final String devicename;
         public String sensor_status;
+        private long temperature_timestamp;
 
         public ArrayList<String> filtering(ArrayList<String> dataCache, int thres, int interval) {
             ArrayList<String> filteredCache = new ArrayList<String> ();
@@ -351,6 +502,24 @@ public class ForegroundService extends Service implements ServiceConnection{
             return filteredCache;
         }
 
+        public void broadcastStatus() {
+            Intent intent = new Intent(BROADCAST_TAG);
+            intent.putExtra("name", this.MAC_ADDRESS);
+            intent.putExtra("status", this.sensor_status);
+            intent.putExtra("temperature", "-99999");
+            intent.putExtra("timestamp", System.currentTimeMillis());
+            sendBroadcast(intent);
+        }
+
+        public void broadcastTemperature(String temp, long time) {
+            Intent intent = new Intent(BROADCAST_TAG);
+            intent.putExtra("name", this.MAC_ADDRESS);
+            intent.putExtra("status", this.sensor_status);
+            intent.putExtra("timestamp", time);
+            intent.putExtra("temperature", temp);
+            sendBroadcast(intent);
+        }
+
         public BoardObject(MetaWearBoard mxBoard, final String MAC, float freq) {
             this.board = mxBoard;
             this.MAC_ADDRESS = MAC;
@@ -362,6 +531,7 @@ public class ForegroundService extends Service implements ServiceConnection{
             this.sampleInterval = 1000 / sampleFreq;
             this.devicename = MAC_ADDRESS.replace(":", "");
             this.sensor_status = CONNECTING;
+            this.temperature_timestamp = 0;
             final String SENSOR_DATA_LOG = "Data:Sensor:" + MAC_ADDRESS;
 
             this.board.setConnectionStateHandler(new MetaWearBoard.ConnectionStateHandler() {
@@ -369,6 +539,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                 public void connected() {
 //                    changeText(MAC_ADDRESS, CONNECTED);
                     sensor_status = CONNECTED;
+                    broadcastStatus();
                     MultiChannelTemperature mcTempModule = null;
                     try {
                         startTimestamp[0] = System.currentTimeMillis();
@@ -423,10 +594,14 @@ public class ForegroundService extends Service implements ServiceConnection{
                                             @Override
                                             public void process(Message message) {
                                                 long timestamp = System.currentTimeMillis();
-                                                double ts_in_sec = timestamp / 1000.0;
-                                                String jsonstr = getJSON(devicename, String.format("%.3f", ts_in_sec), String.format("%.3f", message.getData(Float.class)));
-                                                postTempAsync task = new postTempAsync();
-                                                task.execute(jsonstr);
+                                                if (timestamp - temperature_timestamp >= 50000) {
+                                                    temperature_timestamp = timestamp;
+                                                    double ts_in_sec = timestamp / 1000.0;
+                                                    String jsonstr = getJSON(devicename, String.format("%.3f", ts_in_sec), String.format("%.3f", message.getData(Float.class)));
+                                                    postTempAsync task = new postTempAsync();
+                                                    task.execute(jsonstr);
+                                                    broadcastTemperature(String.format("%.3f", message.getData(Float.class)), timestamp);
+                                                }
                                             }
                                         });
 
@@ -473,8 +648,8 @@ public class ForegroundService extends Service implements ServiceConnection{
                         }
                     }
                     if (!ActiveDisconnect) {
-//                        changeText(MAC_ADDRESS, DISCONNECTED);
                         sensor_status = DISCONNECTED;
+                        broadcastStatus();
                         board.connect();
                     }
                 }
@@ -482,8 +657,8 @@ public class ForegroundService extends Service implements ServiceConnection{
                 @Override
                 public void failure(int status, Throwable error) {
                     error.printStackTrace();
-//                    changeText(MAC_ADDRESS, FAILURE);
                     sensor_status = FAILURE;
+                    broadcastStatus();
                     if (dataCache.size() != 0) {
                         ArrayList<String> temp = new ArrayList<String> (dataCache);
                         dataCache.clear();
