@@ -382,24 +382,28 @@ public class ForegroundService extends Service implements ServiceConnection{
                 try {
                     URL url = new URL(urlbase);
                     HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                    conn.setRequestMethod("POST");
-                    conn.setRequestProperty("content-type", "application/json");
-                    conn.setDoOutput(true);
+                    try {
+                        conn.setRequestMethod("POST");
+                        conn.setRequestProperty("content-type", "application/json");
+                        conn.setDoOutput(true);
 
-                    OutputStream os = conn.getOutputStream();
-                    BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(os, "UTF-8"));
-                    writer.write(params[0]);
-                    writer.flush();
-                    writer.close();
-                    os.close();
+                        OutputStream os = conn.getOutputStream();
+                        BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(os, "UTF-8"));
+                        writer.write(params[0]);
+                        writer.flush();
+                        writer.close();
+                        os.close();
 
-                    conn.connect();
+                        conn.connect();
 
-                    int response = conn.getResponseCode();
-                    if (200 <= response && response < 300) {
-                        Log.i(LOG_TAG, "Post succeed: " + params[0]);
-                    } else {
-                        Log.e(LOG_ERR, "Post error code: " + response + " " + params[0]);
+                        int response = conn.getResponseCode();
+                        if (200 <= response && response < 300) {
+                            Log.i(LOG_TAG, "Post succeed: " + params[0]);
+                        } else {
+                            Log.e(LOG_ERR, "Post error code: " + response + " " + params[0]);
+                        }
+                    } finally {
+                        conn.disconnect();
                     }
                 } catch (MalformedURLException e) {
                     Log.e(LOG_ERR, "Illegal URL");
@@ -423,24 +427,28 @@ public class ForegroundService extends Service implements ServiceConnection{
                 try {
                     URL url = new URL(urlbase);
                     HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                    conn.setRequestMethod("POST");
-                    conn.setRequestProperty("content-type", "application/json");
-                    conn.setDoOutput(true);
+                    try {
+                        conn.setRequestMethod("POST");
+                        conn.setRequestProperty("content-type", "application/json");
+                        conn.setDoOutput(true);
 
-                    OutputStream os = conn.getOutputStream();
-                    BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(os, "UTF-8"));
-                    writer.write(params[0]);
-                    writer.flush();
-                    writer.close();
-                    os.close();
+                        OutputStream os = conn.getOutputStream();
+                        BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(os, "UTF-8"));
+                        writer.write(params[0]);
+                        writer.flush();
+                        writer.close();
+                        os.close();
 
-                    conn.connect();
+                        conn.connect();
 
-                    int response = conn.getResponseCode();
-                    if (200 <= response && response < 300) {
-                        Log.i(LOG_TAG, "Post succeed: " + params[0]);
-                    } else {
-                        Log.e(LOG_ERR, "Post error code: " + response + " " + params[0]);
+                        int response = conn.getResponseCode();
+                        if (200 <= response && response < 300) {
+                            Log.i(LOG_TAG, "Post succeed: " + params[0]);
+                        } else {
+                            Log.e(LOG_ERR, "Post error code: " + response + " " + params[0]);
+                        }
+                    } finally {
+                        conn.disconnect();
                     }
                 } catch (MalformedURLException e) {
                     Log.e(LOG_ERR, "Illegal URL");
