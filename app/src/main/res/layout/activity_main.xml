@@ -13,14 +13,14 @@
         android:onClick="buttonClicked"
         android:layout_below="@+id/TS_5"
         android:layout_centerHorizontal="true"
-        android:layout_marginTop="30dp" />
+        android:layout_marginTop="15dp" />
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/sensor1"
         android:id="@+id/Tag_1"
-        android:layout_marginTop="10dp"
+        android:layout_marginTop="5dp"
         android:layout_alignParentTop="true"
         android:layout_alignParentStart="true"
         android:textStyle="bold" />
@@ -68,7 +68,7 @@
         android:layout_height="wrap_content"
         android:text="@string/sensor2"
         android:id="@+id/Tag_2"
-        android:layout_marginTop="30dp"
+        android:layout_marginTop="15dp"
         android:layout_below="@+id/TS_1"
         android:layout_alignParentStart="true"
         android:textStyle="bold" />
@@ -116,7 +116,7 @@
         android:layout_height="wrap_content"
         android:text="@string/sensor3"
         android:id="@+id/Tag_3"
-        android:layout_marginTop="30dp"
+        android:layout_marginTop="15dp"
         android:layout_below="@+id/TS_2"
         android:layout_alignParentStart="true"
         android:textStyle="bold"/>
@@ -164,7 +164,7 @@
         android:layout_height="wrap_content"
         android:text="@string/sensor4"
         android:id="@+id/Tag_4"
-        android:layout_marginTop="30dp"
+        android:layout_marginTop="15dp"
         android:layout_below="@+id/TS_3"
         android:layout_alignParentStart="true"
         android:textStyle="bold"/>
@@ -212,7 +212,7 @@
         android:layout_height="wrap_content"
         android:text="@string/sensor5"
         android:id="@+id/Tag_5"
-        android:layout_marginTop="30dp"
+        android:layout_marginTop="15dp"
         android:layout_below="@+id/TS_4"
         android:layout_alignParentStart="true"
         android:textStyle="bold"/>
