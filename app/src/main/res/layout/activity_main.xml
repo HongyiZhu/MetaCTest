@@ -11,7 +11,7 @@
         android:layout_height="wrap_content"
         android:text="Start Service"
         android:onClick="buttonClicked"
-        android:layout_below="@+id/TS_4"
+        android:layout_below="@+id/TS_5"
         android:layout_centerHorizontal="true"
         android:layout_marginTop="30dp" />
 
@@ -205,6 +205,54 @@
         android:layout_height="wrap_content"
         android:id="@+id/TS_4"
         android:layout_below="@+id/Degree_4"
+        android:layout_alignParentEnd="true" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/sensor5"
+        android:id="@+id/Tag_5"
+        android:layout_marginTop="30dp"
+        android:layout_below="@+id/TS_4"
+        android:layout_alignParentStart="true"
+        android:textStyle="bold"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:id="@+id/MAC_5"
+        android:layout_alignBottom="@+id/Tag_5"
+        android:layout_toEndOf="@+id/Tag_5" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/degree"
+        android:id="@+id/Degree_5"
+        android:layout_alignBottom="@+id/MAC_5"
+        android:layout_alignParentEnd="true"
+        android:textStyle="bold"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:id="@+id/Temperature_5"
+        android:layout_alignBottom="@+id/Degree_5"
+        android:layout_toStartOf="@+id/Degree_5" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:id="@+id/Status_5"
+        android:text="@string/connecting"
+        android:layout_below="@+id/Tag_5"
+        android:layout_alignParentStart="true" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:id="@+id/TS_5"
+        android:layout_below="@+id/Degree_5"
         android:layout_alignParentEnd="true" />
 
 </RelativeLayout>

@@ -18,10 +18,11 @@ public class Constants {
         public static String BROADCAST_TAG = "com.marothiatechs.foregroundservice.action.broadcast";
     }
 
-    public interface SENSORS {
-        public static String SENSOR1 = "DB:D1:AD:E3:E9:C3";
-        public static String SENSOR2 = "F2:50:71:B0:AE:E1";
-        public static String SENSOR3 = "DF:1C:5C:3F:F2:39";
-        public static String SENSOR4 = "D4:CC:1A:AE:D4:FB";
-    }
+//    public interface SENSORS {
+//        public static String SENSOR1 = "DB:D1:AD:E3:E9:C3";
+//        public static String SENSOR2 = "F2:50:71:B0:AE:E1";
+//        public static String SENSOR3 = "DF:1C:5C:3F:F2:39";
+//        public static String SENSOR4 = "D4:CC:1A:AE:D4:FB";
+//        public static String SENSOR5 = "aa;aa;aa;aa;aa;aa";
+//    }
 }

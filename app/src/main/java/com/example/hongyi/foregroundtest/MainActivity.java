@@ -17,6 +17,8 @@ import android.widget.TextView;
 
 import java.text.SimpleDateFormat;
 
+import static com.example.hongyi.foregroundtest.ForegroundService.*;
+
 public class MainActivity extends AppCompatActivity{
     private MyReceiver broadcastreceiver;
     SimpleDateFormat sdf = new SimpleDateFormat("MMM dd, HH:mm:ss");
@@ -37,19 +39,16 @@ public class MainActivity extends AppCompatActivity{
             String status = intent.getStringExtra("status");
             String temperature = intent.getStringExtra("temperature");
             String index = "";
-            switch (MAC) {
-                case Constants.SENSORS.SENSOR1:
-                    index = "_1";
-                    break;
-                case Constants.SENSORS.SENSOR2:
-                    index = "_2";
-                    break;
-                case Constants.SENSORS.SENSOR3:
-                    index = "_3";
-                    break;
-                case Constants.SENSORS.SENSOR4:
-                    index = "_4";
-                    break;
+            if (MAC.equals(ForegroundService.SENSOR_MAC.get(0))) {
+                index = "_1";
+            } else if (MAC.equals(ForegroundService.SENSOR_MAC.get(1))) {
+                index = "_2";
+            } else if (MAC.equals(ForegroundService.SENSOR_MAC.get(2))) {
+                index = "_3";
+            } else if (MAC.equals(ForegroundService.SENSOR_MAC.get(3))) {
+                index = "_4";
+            } else if (MAC.equals(ForegroundService.SENSOR_MAC.get(4))) {
+                index = "_5";
             }
             if (!index.equals("")) {
                 TextView TV_MAC = (TextView) findViewById(getResources().getIdentifier(lb_MAC+index,"id","com.example.hongyi.foregroundtest"));
@@ -84,9 +83,9 @@ public class MainActivity extends AppCompatActivity{
         intentfilter.addAction(Constants.NOTIFICATION_ID.BROADCAST_TAG);
         registerReceiver(broadcastreceiver, intentfilter);
         Intent service = new Intent(MainActivity.this, ForegroundService.class);
-        if (!ForegroundService.IS_SERVICE_RUNNING) {
+        if (!IS_SERVICE_RUNNING) {
             service.setAction(Constants.ACTION.STARTFOREGROUND_ACTION);
-            ForegroundService.IS_SERVICE_RUNNING = true;
+            IS_SERVICE_RUNNING = true;
             startService(service);
         }
     }
@@ -100,9 +99,9 @@ public class MainActivity extends AppCompatActivity{
     public void buttonClicked(View v) {
         Button button = (Button) v;
         Intent service = new Intent(MainActivity.this, ForegroundService.class);
-        if (ForegroundService.IS_SERVICE_RUNNING) {
+        if (IS_SERVICE_RUNNING) {
             service.setAction(Constants.ACTION.STOPFOREGROUND_ACTION);
-            ForegroundService.IS_SERVICE_RUNNING = false;
+            IS_SERVICE_RUNNING = false;
             button.setText("Start Service");
             startService(service);
         }

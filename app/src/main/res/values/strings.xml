@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">SilverLinkFG</string>
+    <string name="app_name">SilverLinkC</string>
 
     <string name="hello_world">Hello world!</string>
     <string name="action_settings">Settings</string>
@@ -8,6 +8,7 @@
     <string name="sensor2">Sensor 2:</string>
     <string name="sensor3">Sensor 3:</string>
     <string name="sensor4">Sensor 4:</string>
+    <string name="sensor5">Sensor 5:</string>
     <string name="connecting">Connecting</string>
     <string name="message_wait">Please wait</string>
     <string name="title_connecting">Preparing</string>

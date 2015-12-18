@@ -68,7 +68,7 @@ public class ForegroundService extends Service implements ServiceConnection{
     private static final String LOG_TAG = "ForegroundService", LOG_ERR = "http_err";
     private static final String BROADCAST_TAG = Constants.NOTIFICATION_ID.BROADCAST_TAG;
     private MetaWearBleService.LocalBinder ServiceBinder;
-    private final ArrayList<String> SENSOR_MAC = new ArrayList<>();
+    public final static ArrayList<String> SENSOR_MAC = new ArrayList<>();
     private final ArrayList<BoardObject> boards = new ArrayList<>();
     private MetaWearBoard mwBoard;
     private BluetoothAdapter btAdapter;
@@ -88,23 +88,13 @@ public class ForegroundService extends Service implements ServiceConnection{
 
 
     private void initParams() {
-//        At Joshua's place
-//        SENSOR_MAC.add("C7:1C:99:0F:9D:00"); //RG
-
-//        SENSOR_MAC.add("D7:06:C0:09:F7:7F"); //R
-//        SENSOR_MAC.add("F6:E0:22:68:49:AF"); //R
-//        SENSOR_MAC.add("E1:B1:1A:7D:8C:35"); //RG
-//        SENSOR_MAC.add("F2:9F:9C:02:AF:65"); //RG
-//        SENSOR_MAC.add("F5:AB:48:BC:10:6B"); //RPro
-//        SENSOR_MAC.add("EA:B2:F1:47:04:E7"); //RPro
-
 //        4 Sensors for demo
-        SENSOR_MAC.add("DB:D1:AD:E3:E9:C3"); //RG Fridge
-        SENSOR_MAC.add("F2:50:71:B0:AE:E1"); //RG Front door
-        SENSOR_MAC.add("DF:1C:5C:3F:F2:39"); //RG Bath door
-        SENSOR_MAC.add("D4:CC:1A:AE:D4:FB"); //RG Body
+        SENSOR_MAC.add("D2:02:B3:1C:D2:C3"); //C Fridge
+        SENSOR_MAC.add("EB:0B:E2:6E:8C:52"); //C Front door
+        SENSOR_MAC.add("F7:FC:FF:D2:F1:66"); //C Bath door
+        SENSOR_MAC.add("EE:9F:61:85:DA:6C"); //C Body
+        SENSOR_MAC.add("E8:BD:10:7D:58:B4"); //C Custom
     }
-
 
     @Override
     public void onCreate() {
@@ -302,7 +292,7 @@ public class ForegroundService extends Service implements ServiceConnection{
         startBleScan();
 
         try {
-            Thread.sleep(10000);
+            Thread.sleep(15000);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
