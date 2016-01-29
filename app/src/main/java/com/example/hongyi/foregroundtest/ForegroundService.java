@@ -6,7 +6,6 @@ package com.example.hongyi.foregroundtest;
 import android.annotation.TargetApi;
 import android.app.Notification;
 import android.app.PendingIntent;
-import android.app.ProgressDialog;
 import android.app.Service;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
@@ -17,7 +16,6 @@ import android.bluetooth.le.ScanResult;
 import android.bluetooth.le.ScanSettings;
 import android.content.ComponentName;
 import android.content.Context;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.graphics.Bitmap;
@@ -25,13 +23,11 @@ import android.graphics.BitmapFactory;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.AsyncTask;
-import android.os.Handler;
 import android.os.Build;
 import android.os.IBinder;
 import android.os.ParcelUuid;
 import android.support.v7.app.NotificationCompat;
 import android.util.Log;
-import android.widget.Toast;
 
 import com.mbientlab.metawear.AsyncOperation;
 import com.mbientlab.metawear.Message;
@@ -40,7 +36,8 @@ import com.mbientlab.metawear.MetaWearBoard;
 import com.mbientlab.metawear.RouteManager;
 import com.mbientlab.metawear.UnsupportedModuleException;
 import com.mbientlab.metawear.data.CartesianFloat;
-import com.mbientlab.metawear.module.Accelerometer;
+import com.mbientlab.metawear.module.Bmi160Accelerometer;
+import com.mbientlab.metawear.module.Logging;
 import com.mbientlab.metawear.module.MultiChannelTemperature;
 import com.mbientlab.metawear.module.Timer;
 
@@ -60,17 +57,18 @@ import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.lang.Math;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.util.HashSet;
 import java.util.List;
+import java.util.TimerTask;
 import java.util.UUID;
 
 public class ForegroundService extends Service implements ServiceConnection{
     private static final String LOG_TAG = "ForegroundService", LOG_ERR = "http_err";
     private static final String BROADCAST_TAG = Constants.NOTIFICATION_ID.BROADCAST_TAG;
     private MetaWearBleService.LocalBinder ServiceBinder;
-    public final static ArrayList<String> SENSOR_MAC = new ArrayList<>();
-    private final ArrayList<BoardObject> boards = new ArrayList<>();
-    private MetaWearBoard mwBoard;
+    private final static ArrayList<String> SENSOR_MAC = new ArrayList<>();
+    private final ArrayList<Board> boards = new ArrayList<>();
     private BluetoothAdapter btAdapter;
     private boolean isScanning= false;
     private HashSet<UUID> filterServiceUuids;
@@ -88,14 +86,24 @@ public class ForegroundService extends Service implements ServiceConnection{
 
 
     private void initParams() {
-//        4 Sensors for demo
-        SENSOR_MAC.add("D2:02:B3:1C:D2:C3"); //C Fridge
+//        5 Sensors for demo
+        SENSOR_MAC.add("D2:02:B3:1C:D2:C3"); //C Body
         SENSOR_MAC.add("EB:0B:E2:6E:8C:52"); //C Front door
         SENSOR_MAC.add("F7:FC:FF:D2:F1:66"); //C Bath door
-        SENSOR_MAC.add("EE:9F:61:85:DA:6C"); //C Body
+        SENSOR_MAC.add("EE:9F:61:85:DA:6C"); //C Fridge
         SENSOR_MAC.add("E8:BD:10:7D:58:B4"); //C Custom
     }
 
+    public static String getSensors(int i) {
+        String MAC;
+        try {
+            MAC = SENSOR_MAC.get(i);
+        } catch (Exception e) {
+            MAC = String.valueOf(i);
+        }
+
+        return MAC;
+    }
     @Override
     public void onCreate() {
         super.onCreate();
@@ -190,7 +198,6 @@ public class ForegroundService extends Service implements ServiceConnection{
         }
 
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
-            ///< TODO: Use startScan method instead from API 21
             deprecatedScanCallback= new BluetoothAdapter.LeScanCallback() {
                 private void foundDevice(final BluetoothDevice btDevice, final int rssi) {
 
@@ -260,7 +267,6 @@ public class ForegroundService extends Service implements ServiceConnection{
     public void stopBleScan() {
         if (isScanning) {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
-                ///< TODO: Use stopScan method instead from API 21
                 btAdapter.stopLeScan(deprecatedScanCallback);
             } else {
                 btAdapter.getBluetoothLeScanner().stopScan(api21ScallCallback);
@@ -299,26 +305,26 @@ public class ForegroundService extends Service implements ServiceConnection{
 
         stopBleScan();
 
+        BluetoothDevice btDevice = btAdapter.getRemoteDevice(SENSOR_MAC.get(0));
+        boards.add(new BodyBoard(ServiceBinder.getMetaWearBoard(btDevice), SENSOR_MAC.get(0), 12.5f));
+        Log.i(LOG_TAG, "Board added");
 
-        for (int i = 0; i < SENSOR_MAC.size(); i++){
-            BluetoothDevice btDevice = btAdapter.getRemoteDevice(SENSOR_MAC.get(i));
-            boards.add(new BoardObject(ServiceBinder.getMetaWearBoard(btDevice), SENSOR_MAC.get(i), 12.5f));
+        for (int i = 1; i < SENSOR_MAC.size(); i++){
+            btDevice = btAdapter.getRemoteDevice(SENSOR_MAC.get(i));
+            boards.add(new ObjectBoard(ServiceBinder.getMetaWearBoard(btDevice), SENSOR_MAC.get(i), 1.5625f));
             Log.i(LOG_TAG, "Board added");
         }
 
-        for (int i = 0; i < SENSOR_MAC.size();i++){
-            BoardObject b = boards.get(i);
+        for (int i = 1; i < SENSOR_MAC.size();i++){
+            ObjectBoard b = (ObjectBoard) boards.get(i);
             b.sensor_status = b.CONNECTING;
             b.broadcastStatus();
-//            changeText(boards.get(i).MAC_ADDRESS, boards.get(i).CONNECTING);
             b.board.connect();
-//            while (!b.sensor_status.equals(b.CONNECTED)) {
-//                try {
-//                    Thread.sleep(1000);
-//                } catch (InterruptedException e) {
-//                    e.printStackTrace();
-//                }
-//            }
+            try {
+                Thread.sleep(5000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
         }
     }
 
@@ -452,28 +458,20 @@ public class ForegroundService extends Service implements ServiceConnection{
         }
     }
 
-    public class BoardObject {
-        private final String CONNECTED = "Connected.\nStreaming Data",
+    public class Board {
+        public MetaWearBoard board;
+        public Bmi160Accelerometer accel_module;
+        public String sensor_status;
+        public boolean ActiveDisconnect = false;
+        public String MAC_ADDRESS;
+        public final String CONNECTED = "Connected.\nStreaming Data",
                 DISCONNECTED = "Lost connection.\nReconnecting",
                 FAILURE = "Connection error.\nReconnecting",
                 CONNECTING = "Connecting",
                 LOG_TAG = "Board_Log";
-        public MetaWearBoard board;
-        public Accelerometer accel_module;
-        public long[] startTimestamp;
-        public ArrayList<String> dataCache;
-        public int dataCount;
-        public String MAC_ADDRESS;
-        private float sampleFreq;
-        private int uploadCount;
-        private float sampleInterval;
-        public boolean ActiveDisconnect = false;
-        private final String devicename;
-        public String sensor_status;
-        private long temperature_timestamp;
-
+        public Board() {}
         public ArrayList<String> filtering(ArrayList<String> dataCache, int thres, int interval) {
-            ArrayList<String> filteredCache = new ArrayList<String> ();
+            ArrayList<String> filteredCache = new ArrayList<> ();
             if (dataCache.size() == 0) {
                 return filteredCache;
             }
@@ -517,8 +515,160 @@ public class ForegroundService extends Service implements ServiceConnection{
             intent.putExtra("temperature", temp);
             sendBroadcast(intent);
         }
+    }
 
-        public BoardObject(MetaWearBoard mxBoard, final String MAC, float freq) {
+    public class ObjectBoard extends Board{
+        private final float sampleFreq;
+        private String devicename;
+        private final String SENSOR_DATA_LOG;
+        private int first = 0;
+        private byte[] state = null;
+        private List<CartesianFloat> datalist = null;
+        private int routeID = 0;
+        boolean configured = false;
+        java.util.Timer timer;
+
+        private final RouteManager.MessageHandler loggingMessageHandler = new RouteManager.MessageHandler() {
+            @Override
+            public void process(Message message) {
+                datalist.add(message.getData(CartesianFloat.class));
+            }
+        };
+
+        private final AsyncOperation.CompletionHandler<RouteManager> accelHandler = new AsyncOperation.CompletionHandler<RouteManager>() {
+            @Override
+            public void success(RouteManager result) {
+                state = board.serializeState();
+                routeID = result.id();
+                Log.i("info", String.format("RouteID: %d", routeID));
+                result.setLogMessageHandler(SENSOR_DATA_LOG, loggingMessageHandler);
+            }
+        };
+
+        public ObjectBoard(MetaWearBoard mxBoard, final String MAC, float freq) {
+            this.board = mxBoard;
+            this.MAC_ADDRESS = MAC;
+            this.sampleFreq = freq;
+            this.devicename = MAC_ADDRESS.replace(":", "");
+            this.SENSOR_DATA_LOG = "Data:Sensor:" + MAC_ADDRESS;
+
+            this.board.setConnectionStateHandler(new MetaWearBoard.ConnectionStateHandler() {
+                @Override
+                public void connected() {
+                    if (first == 0) {
+                        Log.i("sensor", "Connected");
+                        first = 1;
+                        try {
+                            Logging logger = board.getModule(Logging.class);
+                            logger.startLogging(true);
+                            accel_module = board.getModule(Bmi160Accelerometer.class);
+                            accel_module.configureAxisSampling()
+                                    .setOutputDataRate(Bmi160Accelerometer.OutputDataRate.ODR_1_5625_HZ)
+                                    .enableUndersampling((byte) 4)
+                                    .commit();
+                            accel_module.routeData().fromAxes().log(SENSOR_DATA_LOG).commit().onComplete(accelHandler);
+
+                            accel_module.enableAxisSampling();
+                            accel_module.startLowPower();
+//                        accel.start();
+                            configured = true;
+                            timer = new java.util.Timer();
+                            timer.schedule(new TimerTask() {
+                                @Override
+                                public void run() {
+                                    try {
+                                        board.getModule(Logging.class).clearEntries();
+                                    } catch (UnsupportedModuleException e) {
+                                        e.printStackTrace();
+                                    }
+                                    board.disconnect();
+                                }
+                            }, 20000);
+                            timer.scheduleAtFixedRate(new TimerTask() {
+                                @Override
+                                synchronized public void run() {
+                                    board.connect();
+                                }
+                            }, 80000, 60000);
+//                        board.disconnect();
+                        } catch (UnsupportedModuleException e) {
+                            e.printStackTrace();
+                        }
+                    } else if (first == 1) {
+                        try {
+//                            board.deserializeState(state);
+                            final Logging logger = board.getModule(Logging.class);
+                            datalist = new ArrayList<>();
+//                            RouteManager route = board.getRouteManager(routeID);
+//                            route.setLogMessageHandler(SENSOR_DATA_LOG, loggingMessageHandler);
+
+                            logger.downloadLog(0.1f, new Logging.DownloadHandler() {
+                                @Override
+                                public void onProgressUpdate(int nEntriesLeft, int totalEntries) {
+                                    Log.i("data", String.format("Progress: %d/%d", totalEntries - nEntriesLeft, totalEntries));
+                                    if (nEntriesLeft == 0) {
+                                        Log.i("data", "Download Completed");
+                                        Log.i("data", "Generated " + datalist.size() + " data points");
+                                        datalist.clear();
+//                                    logger.startLogging(true);
+                                        board.disconnect();
+                                    }
+                                }
+
+                                @Override
+                                public void receivedUnknownLogEntry(byte logId, Calendar timestamp, byte[] data) {
+//                                Log.i("dataUnknown", logId + " " + Arrays.toString(data));
+                                }
+
+                                @Override
+                                public void receivedUnhandledLogEntry(Message logMessage) {
+                                    Log.i("dataUnhandled", logMessage.toString());
+                                }
+                            });
+                        } catch (UnsupportedModuleException e) {
+                            e.printStackTrace();
+                        }
+                    } else if (first == -1) {
+                        try {
+                            Logging logger = board.getModule(Logging.class);
+                            Bmi160Accelerometer accel = board.getModule(Bmi160Accelerometer.class);
+                            logger.stopLogging();
+                            logger.clearEntries();
+                            accel.disableAxisSampling();
+                            accel.stop();
+                            board.disconnect();
+                        } catch (UnsupportedModuleException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                }
+
+                @Override
+                public void disconnected() {
+                    super.disconnected();
+                }
+
+                @Override
+                public void failure(int status, Throwable error) {
+                    super.failure(status, error);
+                }
+            });
+        }
+    }
+
+    public class BodyBoard extends Board{
+        public long[] startTimestamp;
+        public ArrayList<String> dataCache;
+        public int dataCount;
+        public String MAC_ADDRESS;
+        private float sampleFreq;
+        private int uploadCount;
+        private float sampleInterval;
+        private final String devicename;
+        public String sensor_status;
+        private long temperature_timestamp;
+
+        public BodyBoard(MetaWearBoard mxBoard, final String MAC, float freq) {
             this.board = mxBoard;
             this.MAC_ADDRESS = MAC;
             this.dataCount = 0;
@@ -538,10 +688,10 @@ public class ForegroundService extends Service implements ServiceConnection{
 //                    changeText(MAC_ADDRESS, CONNECTED);
                     sensor_status = CONNECTED;
                     broadcastStatus();
-                    MultiChannelTemperature mcTempModule = null;
+                    MultiChannelTemperature mcTempModule;
                     try {
                         startTimestamp[0] = System.currentTimeMillis();
-                        accel_module = board.getModule(Accelerometer.class);
+                        accel_module = board.getModule(Bmi160Accelerometer.class);
                         accel_module.setOutputDataRate(sampleFreq);
                         accel_module.routeData().fromAxes().stream(SENSOR_DATA_LOG).commit()
                                 .onComplete(new AsyncOperation.CompletionHandler<RouteManager>() {
@@ -564,7 +714,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                                                         "," + String.valueOf(y_int) + "," + String.valueOf(z_int));
                                                 Log.i(SENSOR_DATA_LOG, String.valueOf(dataCount));
                                                 if (dataCache.size() >= uploadCount) {
-                                                    ArrayList<String> temp = new ArrayList<String>(dataCache);
+                                                    ArrayList<String> temp = new ArrayList<>(dataCache);
                                                     dataCache.clear();
                                                     startTimestamp[0] = System.currentTimeMillis();
                                                     dataCount = 0;
@@ -634,7 +784,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                 @Override
                 public void disconnected() {
                     if (dataCache.size() != 0) {
-                        ArrayList<String> temp = new ArrayList<String> (dataCache);
+                        ArrayList<String> temp = new ArrayList<> (dataCache);
                         dataCache.clear();
                         startTimestamp[0] = System.currentTimeMillis();
                         dataCount = 0;
@@ -658,7 +808,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                     sensor_status = FAILURE;
                     broadcastStatus();
                     if (dataCache.size() != 0) {
-                        ArrayList<String> temp = new ArrayList<String> (dataCache);
+                        ArrayList<String> temp = new ArrayList<> (dataCache);
                         dataCache.clear();
                         startTimestamp[0] = System.currentTimeMillis();
                         dataCount = 0;

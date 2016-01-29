@@ -39,15 +39,15 @@ public class MainActivity extends AppCompatActivity{
             String status = intent.getStringExtra("status");
             String temperature = intent.getStringExtra("temperature");
             String index = "";
-            if (MAC.equals(ForegroundService.SENSOR_MAC.get(0))) {
+            if (MAC.equals(ForegroundService.getSensors(0))) {
                 index = "_1";
-            } else if (MAC.equals(ForegroundService.SENSOR_MAC.get(1))) {
+            } else if (MAC.equals(ForegroundService.getSensors(1))) {
                 index = "_2";
-            } else if (MAC.equals(ForegroundService.SENSOR_MAC.get(2))) {
+            } else if (MAC.equals(ForegroundService.getSensors(2))) {
                 index = "_3";
-            } else if (MAC.equals(ForegroundService.SENSOR_MAC.get(3))) {
+            } else if (MAC.equals(ForegroundService.getSensors(3))) {
                 index = "_4";
-            } else if (MAC.equals(ForegroundService.SENSOR_MAC.get(4))) {
+            } else if (MAC.equals(ForegroundService.getSensors(4))) {
                 index = "_5";
             }
             if (!index.equals("")) {
