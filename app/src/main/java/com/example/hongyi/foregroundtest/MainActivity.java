@@ -9,6 +9,7 @@ import android.content.IntentFilter;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.support.v7.app.AppCompatActivity;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -39,6 +40,7 @@ public class MainActivity extends AppCompatActivity{
             String status = intent.getStringExtra("status");
             String temperature = intent.getStringExtra("temperature");
             String index = "";
+            Log.i("Activity", MAC);
             if (MAC.equals(ForegroundService.getSensors(0))) {
                 index = "_1";
             } else if (MAC.equals(ForegroundService.getSensors(1))) {
