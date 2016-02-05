@@ -435,6 +435,20 @@ public class ForegroundService extends Service implements ServiceConnection{
         return jsonstring.toString();
     }
 
+    public String getJSON (String name, String ts, int battery) {
+        JSONObject jsonstring = new JSONObject();
+        try {
+            jsonstring.put("s", name);
+            jsonstring.put("t", Double.valueOf(ts));
+            jsonstring.put("b", Float.valueOf(battery));
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+
+        return jsonstring.toString();
+    }
+
+
     public class postDataAsync extends AsyncTask<String, Boolean, String> {
         String urlbase = "http://data.silverlink247.com/logs";
         @Override
@@ -525,12 +539,59 @@ public class ForegroundService extends Service implements ServiceConnection{
         }
     }
 
+    public class postBatteryAsync extends AsyncTask<String, Boolean, String> {
+        String urlbase = "http://io.silverlink247.com/battery";
+        @Override
+        protected String doInBackground(String... params) {
+            ConnectivityManager connMgr = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+            NetworkInfo netInfo = connMgr.getActiveNetworkInfo();
+            if (netInfo != null && netInfo.isConnected()) {
+                try {
+                    URL url = new URL(urlbase);
+                    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                    try {
+                        conn.setRequestMethod("POST");
+                        conn.setRequestProperty("content-type", "application/json");
+                        conn.setDoOutput(true);
+
+                        OutputStream os = conn.getOutputStream();
+                        BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(os, "UTF-8"));
+                        writer.write(params[0]);
+                        writer.flush();
+                        writer.close();
+                        os.close();
+
+                        conn.connect();
+
+                        int response = conn.getResponseCode();
+                        if (200 <= response && response < 300) {
+                            Log.i(LOG_TAG, "Post succeed: " + params[0]);
+                        } else {
+                            Log.e(LOG_ERR, "Post error code: " + response + " " + params[0]);
+                        }
+                    } finally {
+                        conn.disconnect();
+                    }
+                } catch (MalformedURLException e) {
+                    Log.e(LOG_ERR, "Illegal URL");
+                } catch (IOException e) {
+                    Log.e(LOG_ERR, "Connection error " + params[0]);
+                }
+            } else {
+                Log.e(LOG_ERR, "No active connection");
+            }
+            return null;
+        }
+    }
+
     public class Board {
         public MetaWearBoard board;
         public Bmi160Accelerometer accel_module;
         public String sensor_status;
         public boolean ActiveDisconnect = false;
         public String MAC_ADDRESS;
+        public String temperature = "-99999";
+        public String battery;
         public final String CONNECTED = "Connected.\nStreaming Data",
                 DISCONNECTED_BODY = "Lost connection.\nReconnecting",
                 DISCONNECTED_OBJ = "Download finished.",
@@ -572,20 +633,20 @@ public class ForegroundService extends Service implements ServiceConnection{
             Intent intent = new Intent(BROADCAST_TAG);
             intent.putExtra("name", this.MAC_ADDRESS);
             intent.putExtra("status", this.sensor_status);
-            intent.putExtra("temperature", "-99999");
+            intent.putExtra("temperature", this.temperature);
             intent.putExtra("timestamp", System.currentTimeMillis());
             Log.i("Intent", intent.getStringExtra("name"));
             sendBroadcast(intent);
         }
 
-        public void broadcastTemperature(String temp, long time) {
-            Intent intent = new Intent(BROADCAST_TAG);
-            intent.putExtra("name", this.MAC_ADDRESS);
-            intent.putExtra("status", this.sensor_status);
-            intent.putExtra("timestamp", time);
-            intent.putExtra("temperature", temp);
-            sendBroadcast(intent);
-        }
+//        public void broadcastTemperature(String temp, long time) {
+//            Intent intent = new Intent(BROADCAST_TAG);
+//            intent.putExtra("name", this.MAC_ADDRESS);
+//            intent.putExtra("status", this.sensor_status);
+//            intent.putExtra("timestamp", time);
+//            intent.putExtra("temperature", temp);
+//            sendBroadcast(intent);
+//        }
     }
 
     public class ObjectBoard extends Board{
@@ -707,8 +768,12 @@ public class ForegroundService extends Service implements ServiceConnection{
                                 board.readBatteryLevel().onComplete(new AsyncOperation.CompletionHandler<Byte>() {
                                     @Override
                                     public void success(Byte result) {
-                                        //TODO: Send Battery Info
-                                        Log.i("battery",result.toString());
+                                        //Send Battery Info
+                                        battery = result.toString();
+                                        Log.i("battery", battery);
+                                        String jsonstr = getJSON(devicename,String.format("%.3f", System.currentTimeMillis()/1000.0), Integer.valueOf(battery));
+                                        postBatteryAsync task = new postBatteryAsync();
+                                        task.execute(jsonstr);
                                     }
                                 });
                                 mcTempModule = board.getModule(MultiChannelTemperature.class);
@@ -726,10 +791,11 @@ public class ForegroundService extends Service implements ServiceConnection{
                                                     infoTS = timestamp;
                                                     double ts_in_sec = timestamp / 1000.0;
                                                     String jsonstr = getJSON(devicename, String.format("%.3f", ts_in_sec), String.format("%.3f", message.getData(Float.class)));
-//                                                    postTempAsync task = new postTempAsync();
-//                                                    task.execute(jsonstr);
+                                                    postTempAsync task = new postTempAsync();
+                                                    task.execute(jsonstr);
+                                                    temperature =  String.format("%.3f", message.getData(Float.class));
                                                     Log.i(devicename, jsonstr);
-                                                    broadcastTemperature(String.format("%.3f", message.getData(Float.class)), timestamp);
+                                                    broadcastStatus();
                                                 }
                                             }
                                         });
@@ -775,11 +841,13 @@ public class ForegroundService extends Service implements ServiceConnection{
                                         Log.i("data", "Download Completed");
                                         Log.i("data", "Generated " + datalist.size() + " data points");
                                         //process listed data
-                                        // TODO: send to server
+                                        // send to server
                                         ArrayList<String> data = getFilteredDataCache((ArrayList<CartesianFloat>)datalist, dl_TS);
                                         if (data.size() > 0) {
                                             String json = getJSON(devicename, data);
                                             Log.i(devicename, json);
+                                            postDataAsync task = new postDataAsync();
+                                            task.execute(json);
                                         }
                                         datalist.clear();
 
@@ -790,34 +858,38 @@ public class ForegroundService extends Service implements ServiceConnection{
                                                 board.readBatteryLevel().onComplete(new AsyncOperation.CompletionHandler<Byte>() {
                                                     @Override
                                                     public void success(Byte result) {
-                                                        //TODO: Send Battery Info
-                                                        Log.i("battery", result.toString());
+                                                        // Send Battery Info
+                                                        battery = result.toString();
+                                                        Log.i("battery_"+devicename, battery);
+                                                        String jsonstr = getJSON(devicename,String.format("%.3f", System.currentTimeMillis()/1000.0), Integer.valueOf(battery));
+                                                        postBatteryAsync task = new postBatteryAsync();
+                                                        task.execute(jsonstr);
                                                     }
                                                 });
                                                 mcTempModule = board.getModule(MultiChannelTemperature.class);
                                                 final List<MultiChannelTemperature.Source> tempSources = mcTempModule.getSources();
-                                                mcTempModule.routeData()
-                                                        .fromSource(tempSources.get(MultiChannelTemperature.MetaWearProChannel.ON_BOARD_THERMISTOR)).stream("temp_"+devicename)
-                                                        .commit().onComplete(new AsyncOperation.CompletionHandler<RouteManager>() {
-                                                    @Override
-                                                    public void success(RouteManager result) {
-                                                        result.subscribe("temp_"+devicename, new RouteManager.MessageHandler() {
-                                                            @Override
-                                                            public void process(Message message) {
-                                                                long timestamp = System.currentTimeMillis();
-                                                                if (timestamp - infoTS >= 210000) {
-                                                                    infoTS = timestamp;
-                                                                    double ts_in_sec = timestamp / 1000.0;
-                                                                    String jsonstr = getJSON(devicename, String.format("%.3f", ts_in_sec), String.format("%.3f", message.getData(Float.class)));
-//                                                                    postTempAsync task = new postTempAsync();
-//                                                                    task.execute(jsonstr);
-                                                                    Log.i(devicename, jsonstr);
-                                                                    broadcastTemperature(String.format("%.3f", message.getData(Float.class)), timestamp);
-                                                                }
-                                                            }
-                                                        });
-                                                    }
-                                                });
+//                                                mcTempModule.routeData()
+//                                                        .fromSource(tempSources.get(MultiChannelTemperature.MetaWearProChannel.ON_BOARD_THERMISTOR)).stream("temp_"+devicename)
+//                                                        .commit().onComplete(new AsyncOperation.CompletionHandler<RouteManager>() {
+//                                                    @Override
+//                                                    public void success(RouteManager result) {
+//                                                        result.subscribe("temp_"+devicename, new RouteManager.MessageHandler() {
+//                                                            @Override
+//                                                            public void process(Message message) {
+//                                                                long timestamp = System.currentTimeMillis();
+//                                                                if (timestamp - infoTS >= 210000) {
+//                                                                    infoTS = timestamp;
+//                                                                    double ts_in_sec = timestamp / 1000.0;
+//                                                                    String jsonstr = getJSON(devicename, String.format("%.3f", ts_in_sec), String.format("%.3f", message.getData(Float.class)));
+////                                                                    postTempAsync task = new postTempAsync();
+////                                                                    task.execute(jsonstr);
+//                                                                    Log.i(devicename, jsonstr);
+//                                                                    broadcastTemperature(String.format("%.3f", message.getData(Float.class)), timestamp);
+//                                                                }
+//                                                            }
+//                                                        });
+//                                                    }
+//                                                });
                                                 mcTempModule.readTemperature(tempSources.get(MultiChannelTemperature.MetaWearProChannel.ON_BOARD_THERMISTOR));
 
                                             } catch (UnsupportedModuleException e) {
@@ -892,13 +964,14 @@ public class ForegroundService extends Service implements ServiceConnection{
                                     e.printStackTrace();
                                 }
                                 stopBleScan();
-                                connectionAttemptTS = System.currentTimeMillis();
+//                                connectionAttemptTS = System.currentTimeMillis();
                                 board.connect();
                             }
                         };
-                        if (connectionFailureCount < 3) {
+                        if (connectionFailureCount < 2) {
                             timer.schedule(reconnect, 0);
                         } else {
+                            connectionFailureCount = 0;
                             long interval = 235000 - (System.currentTimeMillis() - connectionAttemptTS);
                             timer.schedule(reconnect, interval);
                         }
@@ -957,7 +1030,7 @@ public class ForegroundService extends Service implements ServiceConnection{
 //                    changeText(MAC_ADDRESS, CONNECTED);
                     sensor_status = CONNECTED;
                     broadcastStatus();
-                    MultiChannelTemperature mcTempModule;
+                    final MultiChannelTemperature mcTempModule;
                     try {
                         startTimestamp[0] = System.currentTimeMillis();
                         accel_module = board.getModule(Bmi160Accelerometer.class);
@@ -990,9 +1063,9 @@ public class ForegroundService extends Service implements ServiceConnection{
                                                     ArrayList<String> filteredCache = filtering(temp, 32, 3);
                                                     if (filteredCache.size() > 0) {
                                                         String jsonstr = getJSON(devicename, filteredCache);
-                                                        //TODO: switch to send
-//                                                        postDataAsync task = new postDataAsync();
-//                                                        task.execute(jsonstr);
+                                                        //switch to send
+                                                        postDataAsync task = new postDataAsync();
+                                                        task.execute(jsonstr);
                                                         Log.i(devicename, jsonstr);
                                                     }
 //                                                    Log.i(LOG_ERR, getJSON(devicename, filtering(temp, 10, 3)));
@@ -1003,7 +1076,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                                 });
                         mcTempModule = board.getModule(MultiChannelTemperature.class);
                         final List<MultiChannelTemperature.Source> tempSources= mcTempModule.getSources();
-                        final MultiChannelTemperature finalMcTempModule = mcTempModule;
+//                        final MultiChannelTemperature finalMcTempModule = mcTempModule;
                         mcTempModule.routeData()
                                 .fromSource(tempSources.get(MultiChannelTemperature.MetaWearProChannel.ON_BOARD_THERMISTOR)).stream("thermistor_stream")
                                 .commit().onComplete(new AsyncOperation.CompletionHandler<RouteManager>() {
@@ -1013,44 +1086,56 @@ public class ForegroundService extends Service implements ServiceConnection{
                                             @Override
                                             public void process(Message message) {
                                                 long timestamp = System.currentTimeMillis();
-                                                if (timestamp - temperature_timestamp >= 235000) {
+                                                if (timestamp - temperature_timestamp >= 220000) {
                                                     temperature_timestamp = timestamp;
                                                     double ts_in_sec = timestamp / 1000.0;
                                                     String jsonstr = getJSON(devicename, String.format("%.3f", ts_in_sec), String.format("%.3f", message.getData(Float.class)));
-                                                    //TODO: send to server
-//                                                    postTempAsync task = new postTempAsync();
-//                                                    task.execute(jsonstr);
+                                                    //send to server
+                                                    postTempAsync task = new postTempAsync();
+                                                    task.execute(jsonstr);
+                                                    temperature = String.format("%.3f", message.getData(Float.class));
                                                     Log.i(devicename, jsonstr);
-                                                    broadcastTemperature(String.format("%.3f", message.getData(Float.class)), timestamp);
                                                     // get body sensor battery info
                                                     board.readBatteryLevel().onComplete(new AsyncOperation.CompletionHandler<Byte>() {
                                                         @Override
                                                         public void success(Byte result) {
-                                                            //TODO: Send Battery Info
-                                                            Log.i("battery", result.toString());
+                                                            // Send Battery Info
+                                                            battery = result.toString();
+                                                            Log.i("battery_Body", result.toString());
+                                                            String jsonstr = getJSON(devicename,String.format("%.3f", System.currentTimeMillis()/1000.0), Integer.valueOf(result.toString()));
+                                                            postBatteryAsync task = new postBatteryAsync();
+                                                            task.execute(jsonstr);
                                                         }
                                                     });
+                                                    broadcastStatus();
                                                 }
                                             }
                                         });
 
-                                        try {
-                                            AsyncOperation<Timer.Controller> taskResult= board.getModule(Timer.class)
-                                                    .scheduleTask(new Timer.Task() {
-                                                        @Override
-                                                        public void commands() {
-                                                            finalMcTempModule.readTemperature(tempSources.get(MultiChannelTemperature.MetaWearProChannel.ON_BOARD_THERMISTOR));
-                                                        }
-                                                    }, 240000, false);
-                                            taskResult.onComplete(new AsyncOperation.CompletionHandler<Timer.Controller>() {
-                                                @Override
-                                                public void success(Timer.Controller result) {
-                                                    result.start();
-                                                }
-                                            });
-                                        } catch (UnsupportedModuleException e) {
-                                            e.printStackTrace();
-                                        }
+                                        java.util.Timer timer = new java.util.Timer();
+                                        timer.schedule(new TimerTask() {
+                                            @Override
+                                            public void run() {
+                                                mcTempModule.readTemperature(tempSources.get(MultiChannelTemperature.MetaWearProChannel.ON_BOARD_THERMISTOR));
+                                            }
+                                        },0,240000);
+//                                        try {
+//                                            AsyncOperation<Timer.Controller> taskResult= board.getModule(Timer.class)
+//                                                    .scheduleTask(new Timer.Task() {
+//                                                        @Override
+//                                                        public void commands() {
+//                                                            finalMcTempModule.readTemperature(tempSources.get(MultiChannelTemperature.MetaWearProChannel.ON_BOARD_THERMISTOR));
+//                                                        }
+//                                                    }, 240000, false);
+//                                            taskResult.onComplete(new AsyncOperation.CompletionHandler<Timer.Controller>() {
+//                                                @Override
+//                                                public void success(Timer.Controller result) {
+//                                                    result.start();
+//                                                }
+//                                            });
+//                                        } catch (UnsupportedModuleException e) {
+//                                            e.printStackTrace();
+//                                        }
                                     }
                                 });
                     } catch (UnsupportedModuleException e) {
@@ -1059,7 +1144,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                     accel_module.enableAxisSampling();
                     startTimestamp[0] = System.currentTimeMillis();
                     dataCount = 0;
-                    accel_module.start();
+                    accel_module.startLowPower();
                 }
 
                 @Override
