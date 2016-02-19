@@ -6,9 +6,13 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.IBinder;
 import android.support.v7.app.AppCompatActivity;
+import android.telephony.TelephonyManager;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -16,6 +20,23 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
 
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.BufferedInputStream;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.ObjectOutputStream;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
+import java.net.ProtocolException;
+import java.net.URL;
+import java.net.URLClassLoader;
+import java.net.URLConnection;
 import java.text.SimpleDateFormat;
 
 import static com.example.hongyi.foregroundtest.ForegroundService.*;
@@ -74,22 +95,113 @@ public class MainActivity extends AppCompatActivity{
         }
     }
 
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        System.setProperty("http.keepAlive", "false");
+        String phoneID = ((TelephonyManager) getSystemService(TELEPHONY_SERVICE)).getDeviceId();
+        Log.i("phoneID", phoneID);
+        if (!IS_SERVICE_RUNNING) {
+            ConnectivityManager connMgr = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+            NetworkInfo netInfo = connMgr.getActiveNetworkInfo();
+            while (netInfo == null || !netInfo.isConnected()) {
+                try {
+                    Thread.sleep(3000);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                netInfo = connMgr.getActiveNetworkInfo();
+            }
+            final Handler mHandler = new Handler() {
+                @Override
+                public void handleMessage(android.os.Message msg) {
+                    String res = (String) msg.obj;
+                    Intent service = new Intent(MainActivity.this, ForegroundService.class);
+                    service.setAction(Constants.ACTION.STARTFOREGROUND_ACTION);
+                    try {
+                        JSONArray jsonarr = new JSONArray(res);
+                        for (int i = 0;i<jsonarr.length();i++) {
+                            JSONObject jsobj = jsonarr.getJSONObject(i);
+                            String id = ((String) jsobj.get("sensor_id")).replaceAll("..(?!$)", "$0:");
+                            String sn = (String) jsobj.get("sensor_sn");
+                            String lb = sn.substring(sn.length() - 1);
+                            Log.i("sensor", "Label: " + lb + ".\tMAC: "+id);
+                            service.putExtra(lb, id);
+                        }
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                    }
+                    IS_SERVICE_RUNNING = true;
+                    startService(service);
+                }
+            };
+
+            Thread getReq = new Thread() {
+                @Override
+                public void run() {
+                    String phoneID = ((TelephonyManager) getSystemService(TELEPHONY_SERVICE)).getDeviceId();
+                    Log.i("phoneID", phoneID);
+                    URL url;
+                    HttpURLConnection connection = null;
+                    try {
+                        url = new URL("https://app.silverlink247.com/api/v1/gateways/"+phoneID+"/sensors?access_token=a3nV4VJMYV8fsoyZTSXV");
+                        connection = (HttpURLConnection) url.openConnection();
+                        connection.setRequestMethod("GET");
+                        try {
+                            connection.connect();
+
+                            InputStream in = new BufferedInputStream(connection.getInputStream());
+                            StringBuilder sb = new StringBuilder();
+
+                            String line;
+                            BufferedReader br = new BufferedReader(new InputStreamReader(in));
+                            while ((line = br.readLine()) != null) {
+                                sb.append(line);
+                            }
+                            String jsonstr = sb.toString();
+                            android.os.Message msg = android.os.Message.obtain();
+                            msg.obj = jsonstr;
+                            msg.setTarget(mHandler);
+                            msg.sendToTarget();
+                        } catch (IOException e) {
+                            Log.e("http_err", "IOException with .connect()");
+                            e.printStackTrace();
+                        } finally {
+                            connection.disconnect();
+                        }
+                    } catch (MalformedURLException e) {
+                        e.printStackTrace();
+                    } catch (ProtocolException e) {
+                        Log.e("http_err", "ProtocolException");
+                        e.printStackTrace();
+                    } catch (IOException e) {
+                        Log.e("http_err", "IOException");
+                        e.printStackTrace();
+                    }
+                }
+            };
+
+            getReq.start();
+
+        }
+
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         Button button = (Button) findViewById(R.id.button1);
         button.setText("Stop Service");
+
         broadcastreceiver = new MyReceiver();
         IntentFilter intentfilter = new IntentFilter();
         intentfilter.addAction(Constants.NOTIFICATION_ID.BROADCAST_TAG);
         registerReceiver(broadcastreceiver, intentfilter);
-        Intent service = new Intent(MainActivity.this, ForegroundService.class);
-        if (!IS_SERVICE_RUNNING) {
-            service.setAction(Constants.ACTION.STARTFOREGROUND_ACTION);
-            IS_SERVICE_RUNNING = true;
-            startService(service);
-        }
+
+
+
+//        if (!IS_SERVICE_RUNNING) {
+//            service.setAction(Constants.ACTION.STARTFOREGROUND_ACTION);
+//            IS_SERVICE_RUNNING = true;
+//            startService(service);
+//        }
     }
 
     @Override
@@ -104,7 +216,7 @@ public class MainActivity extends AppCompatActivity{
         if (IS_SERVICE_RUNNING) {
             service.setAction(Constants.ACTION.STOPFOREGROUND_ACTION);
             IS_SERVICE_RUNNING = false;
-            button.setText("Start Service");
+            button.setText("Service Stopped");
             startService(service);
         }
     }
