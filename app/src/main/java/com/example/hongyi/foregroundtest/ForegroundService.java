@@ -27,7 +27,6 @@ import android.os.Build;
 import android.os.IBinder;
 import android.os.ParcelUuid;
 import android.support.v7.app.NotificationCompat;
-import android.telephony.TelephonyManager;
 import android.util.Log;
 
 import com.mbientlab.metawear.AsyncOperation;
@@ -40,35 +39,49 @@ import com.mbientlab.metawear.data.CartesianFloat;
 import com.mbientlab.metawear.module.Bmi160Accelerometer;
 import com.mbientlab.metawear.module.Logging;
 import com.mbientlab.metawear.module.MultiChannelTemperature;
-import com.mbientlab.metawear.module.Timer;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
-import java.lang.reflect.Array;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.lang.Math;
 import java.util.Arrays;
 import java.util.Calendar;
+import java.util.Date;
+import java.util.GregorianCalendar;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Queue;
+import java.util.Timer;
 import java.util.TimerTask;
 import java.util.UUID;
 
 public class ForegroundService extends Service implements ServiceConnection{
+    private Timer servicetimer;
+    private Queue<String> resendDataQueue = new LinkedList<>();
+    private Queue<String> resendBatteryQueue = new LinkedList<>();
+    private Queue<String> resendTempQueue = new LinkedList<>();
+    private File log_file;
     private static final String LOG_TAG = "ForegroundService", LOG_ERR = "http_err";
+    private static final String _info = "INF", _success = "SUC", _error = "ERR";
     private static final String BROADCAST_TAG = Constants.NOTIFICATION_ID.BROADCAST_TAG;
-    private MetaWearBleService.LocalBinder ServiceBinder;
     private final static ArrayList<String> SENSOR_MAC = new ArrayList<>();
     private final ArrayList<Board> boards = new ArrayList<>();
     private BluetoothAdapter btAdapter;
@@ -87,14 +100,14 @@ public class ForegroundService extends Service implements ServiceConnection{
     }
 
 
-    private void initParams() {
+//    private void initParams() {
 //        5 Sensors for demo
 //        SENSOR_MAC.add("D2:02:B3:1C:D2:C3"); //C Body
 //        SENSOR_MAC.add("EB:0B:E2:6E:8C:52"); //C Front door
 //        SENSOR_MAC.add("F7:FC:FF:D2:F1:66"); //C Bath door
 //        SENSOR_MAC.add("EE:9F:61:85:DA:6C"); //C Fridge
 //        SENSOR_MAC.add("E8:BD:10:7D:58:B4"); //C Custom
-    }
+//    }
 
     public static String getSensors(int i) {
         String MAC;
@@ -109,11 +122,68 @@ public class ForegroundService extends Service implements ServiceConnection{
     @Override
     public void onCreate() {
         super.onCreate();
+        servicetimer = new Timer();
+
+        // Change log files every hour
+        servicetimer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                Calendar day_time = new GregorianCalendar();
+                int year = day_time.get(GregorianCalendar.YEAR);
+                int month = day_time.get(GregorianCalendar.MONTH) + 1;
+                int day = day_time.get(GregorianCalendar.DAY_OF_MONTH);
+                int hour = day_time.get(GregorianCalendar.HOUR_OF_DAY);
+                int minute = day_time.get(GregorianCalendar.MINUTE);
+                int second = day_time.get(GregorianCalendar.SECOND);
+                String log_filename = year + "-" + month + "-" + day + "_" + hour + "_" + minute + "_" + second + ".log";
+                String address = (getApplicationContext().getExternalFilesDirs("")[0].getAbsolutePath() + "/logs").contains("external_SD") ? getApplicationContext().getExternalFilesDirs("")[1].getAbsolutePath() + "/logs" : getApplicationContext().getExternalFilesDirs("")[0].getAbsolutePath() + "/logs";
+                Log.i("paths", address);
+                File folder = new File(address);
+                if (!folder.exists()) {
+                    folder.mkdirs();
+                }
+                log_file = new File(folder, log_filename);
+                log_file.setReadable(true);
+                log_file.setWritable(true);
+            }
+        }, 0, 3600000);
+
         getApplicationContext().bindService(new Intent(this, MetaWearBleService.class), this, Context.BIND_AUTO_CREATE);
 //        String phoneID = ((TelephonyManager) getSystemService(TELEPHONY_SERVICE)).getDeviceId();
 //        Log.i("phoneID", phoneID);
 //        initParams();
         Log.i(LOG_TAG, "successfully on create");
+    }
+
+    private String getFormattedTime() {
+        SimpleDateFormat sdfDate = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");//dd/MM/yyyy
+        Date now = new Date();
+        String strDate = sdfDate.format(now);
+        return strDate;
+    }
+
+    private void writeSensorLog(String s, String... flags) {
+        BufferedWriter bw = null;
+        try {
+            bw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(log_file, true)));
+            bw.write(getFormattedTime() + "\t");
+            for (String flag : flags) {
+                bw.write(flag + "\t");
+            }
+            bw.write(s);
+            bw.newLine();
+            bw.flush();
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            try {
+                if (bw != null) {
+                    bw.close();
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
     }
 
     @Override
@@ -124,13 +194,15 @@ public class ForegroundService extends Service implements ServiceConnection{
             SENSOR_MAC.add(intent.getStringExtra("C"));
             SENSOR_MAC.add(intent.getStringExtra("D"));
             SENSOR_MAC.add(intent.getStringExtra("E"));
-            Log.i(LOG_TAG, "Received Start Foreground Intent ");
+            Log.i(LOG_TAG, "Received Start Foreground Intent");
+//            writeSensorLog("Received Start Foreground Intent", _info);
             showNotification();
 //            Toast.makeText(this, "Service Started!", Toast.LENGTH_SHORT).show();
 
         } else if (intent.getAction().equals(
                 Constants.ACTION.STOPFOREGROUND_ACTION)) {
             Log.i(LOG_TAG, "Received Stop Foreground Intent");
+            writeSensorLog("Received Stop Foreground Intent", _info);
             stopForeground(true);
             stopSelf();
         }
@@ -157,20 +229,25 @@ public class ForegroundService extends Service implements ServiceConnection{
                 .setContentIntent(pendingIntent)
                 .setOngoing(true).build();
         Log.i(LOG_TAG, "successfully build a notification");
+        writeSensorLog("successfully build a notification", _info);
         startForeground(Constants.NOTIFICATION_ID.FOREGROUND_SERVICE,
                 notification);
         Log.i(LOG_TAG, "started foreground");
+        writeSensorLog("started foreground", _info);
 
     }
 
     @Override
     //clear the boards
     public void onDestroy() {
+        Log.i(LOG_TAG, "In onDestroy");
+        writeSensorLog("In onDestroy", _info);
         boards.get(0).accel_module.stop();
         boards.get(0).accel_module.disableAxisSampling();
         boards.get(0).ActiveDisconnect = true;
         boards.get(0).board.disconnect();
-
+        Log.i(LOG_TAG, "Body sensor destroyed");
+        writeSensorLog("Body sensor destroyed", _info);
         for (int i = 1; i < SENSOR_MAC.size(); i++) {
             startBleScan();
             try {
@@ -193,7 +270,8 @@ public class ForegroundService extends Service implements ServiceConnection{
         }
         super.onDestroy();
         getApplicationContext().unbindService(this);
-        Log.i(LOG_TAG, "In onDestroy");
+        Log.i(LOG_TAG, "All destruction finished");
+        writeSensorLog("All destruction finished", _info);
 //        Toast.makeText(this, "Service Detroyed!", Toast.LENGTH_SHORT).show();
     }
 
@@ -307,7 +385,29 @@ public class ForegroundService extends Service implements ServiceConnection{
 
     @Override
     public void onServiceConnected(ComponentName name, IBinder service) {
-        ServiceBinder = (MetaWearBleService.LocalBinder) service;
+        // Timer to resend the data in the Queue
+        servicetimer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                if (resendDataQueue.size() > 0) {
+                    String data = resendDataQueue.poll();
+                    postDataAsync task = new postDataAsync();
+                    task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, data);
+                }
+                if (resendBatteryQueue.size() > 0) {
+                    String data = resendBatteryQueue.poll();
+                    postBatteryAsync task = new postBatteryAsync();
+                    task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, data);
+                }
+                if (resendTempQueue.size() > 0) {
+                    String data = resendTempQueue.poll();
+                    postTempAsync task = new postTempAsync();
+                    task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, data);
+                }
+            }
+        }, 0, 20000);
+
+        MetaWearBleService.LocalBinder serviceBinder = (MetaWearBleService.LocalBinder) service;
 
         btAdapter = ((BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE)).getAdapter();
 
@@ -336,19 +436,22 @@ public class ForegroundService extends Service implements ServiceConnection{
 
         // Add body sensor
         BluetoothDevice btDevice = btAdapter.getRemoteDevice(SENSOR_MAC.get(0));
-        boards.add(new BodyBoard(ServiceBinder.getMetaWearBoard(btDevice), SENSOR_MAC.get(0), 12.5f));
-        Log.i(LOG_TAG, "Board added");
+        boards.add(new BodyBoard(serviceBinder.getMetaWearBoard(btDevice), SENSOR_MAC.get(0), 12.5f));
+        Log.i(LOG_TAG, "Body Board added");
+        writeSensorLog("Body Board added", _info);
 
         // Add four object sensors
         for (int i = 1; i < SENSOR_MAC.size(); i++){
             btDevice = btAdapter.getRemoteDevice(SENSOR_MAC.get(i));
-            boards.add(new ObjectBoard(ServiceBinder.getMetaWearBoard(btDevice), SENSOR_MAC.get(i), 1.5625f));
-            Log.i(LOG_TAG, "Board added");
+            boards.add(new ObjectBoard(serviceBinder.getMetaWearBoard(btDevice), SENSOR_MAC.get(i), 1.5625f));
+            Log.i(LOG_TAG, "Object Board added");
+            writeSensorLog("Object Board added", _info);
         }
 
         BodyBoard body = (BodyBoard) boards.get(0);
         body.sensor_status = body.CONNECTING;
         body.broadcastStatus();
+        writeSensorLog("Try to connect", _info, body.devicename);
         body.board.connect();
         try {
             Thread.sleep(5000);
@@ -365,6 +468,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                 b.sensor_status = b.CONNECTING;
                 b.broadcastStatus();
                 b.connectionAttemptTS = System.currentTimeMillis();
+                writeSensorLog("Try to connect", _info, b.devicename);
                 b.board.connect();
             }
         }, 0);
@@ -375,6 +479,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                 b.sensor_status = b.CONNECTING;
                 b.broadcastStatus();
                 b.connectionAttemptTS = System.currentTimeMillis();
+                writeSensorLog("Try to connect", _info, b.devicename);
                 b.board.connect();
             }
         }, 60000);
@@ -385,6 +490,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                 b.sensor_status = b.CONNECTING;
                 b.broadcastStatus();
                 b.connectionAttemptTS = System.currentTimeMillis();
+                writeSensorLog("Try to connect", _info, b.devicename);
                 b.board.connect();
             }
         }, 120000);
@@ -395,6 +501,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                 b.sensor_status = b.CONNECTING;
                 b.broadcastStatus();
                 b.connectionAttemptTS = System.currentTimeMillis();
+                writeSensorLog("Try to connect", _info, b.devicename);
                 b.board.connect();
             }
         }, 180000);
@@ -469,21 +576,34 @@ public class ForegroundService extends Service implements ServiceConnection{
                         conn.setRequestProperty("content-type", "application/json");
                         conn.setRequestProperty("connection", "close");
                         conn.setDoOutput(true);
+                        conn.setDoInput(true);
+                        conn.setUseCaches(false);
+                        conn.setChunkedStreamingMode(1024);
+                        conn.setInstanceFollowRedirects(true);
 
                         OutputStream os = conn.getOutputStream();
                         BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(os, "UTF-8"));
                         writer.write(params[0]);
                         writer.flush();
                         writer.close();
+                        os.flush();
                         os.close();
 
-                        conn.connect();
-
                         int response = conn.getResponseCode();
-                        if (200 <= response && response < 300) {
+                        if (response == HttpURLConnection.HTTP_OK) {
                             Log.i(LOG_TAG, "Post succeed: " + params[0]);
+                            InputStream is = conn.getInputStream();
+                            BufferedReader br = new BufferedReader(new InputStreamReader(is));
+                            String line = br.readLine();
+                            while(line!=null){
+                                Log.i("Http_response", line);
+                                writeSensorLog("HTTP Response: " + line.trim(), _success, "Data");
+                                line = br.readLine();
+                            }
                         } else {
                             Log.e(LOG_ERR, "Post error code: " + response + " " + params[0]);
+                            resendDataQueue.offer(params[0]);
+                            writeSensorLog("Post err code: " + response + " " + params[0].substring(0, 50), _error);
                         }
                     } finally {
                         conn.disconnect();
@@ -492,10 +612,13 @@ public class ForegroundService extends Service implements ServiceConnection{
                     Log.e(LOG_ERR, "Illegal URL");
                 } catch (IOException e) {
                     Log.e(LOG_ERR, "Connection error " + e.getMessage() + " " + params[0]);
-                    e.printStackTrace();
+                    resendDataQueue.offer(params[0]);
+                    writeSensorLog("Connection error: " + e.getMessage() + " " + params[0].substring(0, 50), _error);
                 }
             } else {
-                Log.e(LOG_ERR, "No active connection");
+                Log.e(LOG_ERR, "No active connection, add request back to queue");
+                resendDataQueue.offer(params[0]);
+                writeSensorLog("No active connection, add to wait queue: " + params[0].substring(0, 50), _error);
             }
             return null;
         }
@@ -516,21 +639,34 @@ public class ForegroundService extends Service implements ServiceConnection{
                         conn.setRequestProperty("content-type", "application/json");
                         conn.setRequestProperty("connection", "close");
                         conn.setDoOutput(true);
+                        conn.setDoInput(true);
+                        conn.setUseCaches(false);
+                        conn.setChunkedStreamingMode(1024);
+                        conn.setInstanceFollowRedirects(true);
 
                         OutputStream os = conn.getOutputStream();
                         BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(os, "UTF-8"));
                         writer.write(params[0]);
                         writer.flush();
                         writer.close();
+                        os.flush();
                         os.close();
 
-                        conn.connect();
-
                         int response = conn.getResponseCode();
-                        if (200 <= response && response < 300) {
+                        if (response == HttpURLConnection.HTTP_OK) {
                             Log.i(LOG_TAG, "Post succeed: " + params[0]);
+                            InputStream is = conn.getInputStream();
+                            BufferedReader br = new BufferedReader(new InputStreamReader(is));
+                            String line = br.readLine();
+                            while(line!=null){
+                                Log.i("Http_response", line);
+                                writeSensorLog("HTTP Response: " + line.trim(), _success, "Data");
+                                line = br.readLine();
+                            }
                         } else {
                             Log.e(LOG_ERR, "Post error code: " + response + " " + params[0]);
+                            resendTempQueue.offer(params[0]);
+                            writeSensorLog("Post err code: " + response + " " + params[0].substring(0, 50), _error);
                         }
                     } finally {
                         conn.disconnect();
@@ -539,9 +675,13 @@ public class ForegroundService extends Service implements ServiceConnection{
                     Log.e(LOG_ERR, "Illegal URL");
                 } catch (IOException e) {
                     Log.e(LOG_ERR, "Connection error " + e.getMessage() + " " + params[0]);
+                    resendTempQueue.offer(params[0]);
+                    writeSensorLog("Connection error: " + e.getMessage() + " " + params[0].substring(0, 50), _error);
                 }
             } else {
                 Log.e(LOG_ERR, "No active connection");
+                resendTempQueue.offer(params[0]);
+                writeSensorLog("No active connection, add to wait queue: " + params[0].substring(0, 50), _error);
             }
             return null;
         }
@@ -562,21 +702,34 @@ public class ForegroundService extends Service implements ServiceConnection{
                         conn.setRequestProperty("content-type", "application/json");
                         conn.setRequestProperty("connection", "close");
                         conn.setDoOutput(true);
+                        conn.setDoInput(true);
+                        conn.setUseCaches(false);
+                        conn.setChunkedStreamingMode(1024);
+                        conn.setInstanceFollowRedirects(true);
 
                         OutputStream os = conn.getOutputStream();
                         BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(os, "UTF-8"));
                         writer.write(params[0]);
                         writer.flush();
                         writer.close();
+                        os.flush();
                         os.close();
 
-                        conn.connect();
-
                         int response = conn.getResponseCode();
-                        if (200 <= response && response < 300) {
+                        if (response == HttpURLConnection.HTTP_OK) {
                             Log.i(LOG_TAG, "Post succeed: " + params[0]);
+                            InputStream is = conn.getInputStream();
+                            BufferedReader br = new BufferedReader(new InputStreamReader(is));
+                            String line = br.readLine();
+                            while(line!=null){
+                                Log.i("Http_response", line);
+                                writeSensorLog("HTTP Response: " + line.trim(), _success, "Data");
+                                line = br.readLine();
+                            }
                         } else {
                             Log.e(LOG_ERR, "Post error code: " + response + " " + params[0]);
+                            resendBatteryQueue.offer(params[0]);
+                            writeSensorLog("Post err code: " + response + " " + params[0].substring(0, 50), _error);
                         }
                     } finally {
                         conn.disconnect();
@@ -585,9 +738,13 @@ public class ForegroundService extends Service implements ServiceConnection{
                     Log.e(LOG_ERR, "Illegal URL");
                 } catch (IOException e) {
                     Log.e(LOG_ERR, "Connection error " + e.getMessage() + " " + params[0]);
+                    resendBatteryQueue.offer(params[0]);
+                    writeSensorLog("Connection error: " + e.getMessage() + " " + params[0].substring(0, 50), _error);
                 }
             } else {
                 Log.e(LOG_ERR, "No active connection");
+                resendBatteryQueue.offer(params[0]);
+                writeSensorLog("No active connection, add to wait queue: " + params[0].substring(0, 50), _error);
             }
             return null;
         }
@@ -663,7 +820,7 @@ public class ForegroundService extends Service implements ServiceConnection{
         private String devicename;
         private final String SENSOR_DATA_LOG;
         private int first = 0;
-        private byte[] state = null;
+//        private byte[] state = null;
         private List<CartesianFloat> datalist = null;
         private int routeID = 0;
         boolean configured = false;
@@ -672,7 +829,7 @@ public class ForegroundService extends Service implements ServiceConnection{
         java.util.Timer timer;
         private long infoTS = 0;
         boolean destroyed = false;
-        boolean started = false;
+//        boolean started = false;
         int total = 0;
 
         private final RouteManager.MessageHandler loggingMessageHandler = new RouteManager.MessageHandler() {
@@ -685,9 +842,10 @@ public class ForegroundService extends Service implements ServiceConnection{
         private final AsyncOperation.CompletionHandler<RouteManager> accelHandler = new AsyncOperation.CompletionHandler<RouteManager>() {
             @Override
             public void success(RouteManager result) {
-                state = board.serializeState();
+//                state = board.serializeState();
                 routeID = result.id();
                 Log.i("info", String.format("RouteID: %d", routeID));
+                writeSensorLog("Data routes established", _info, devicename);
                 result.setLogMessageHandler(SENSOR_DATA_LOG, loggingMessageHandler);
             }
         };
@@ -778,9 +936,9 @@ public class ForegroundService extends Service implements ServiceConnection{
                         }
                         sensor_status = INITIATED;
                         broadcastStatus();
+                        writeSensorLog("Board Initialized", _info, devicename);
                         board.disconnect();
                     } else if (first == 1) {
-                        Log.i("sensor", "Connected");
                         first = 2;
                         try {
                             Logging logger = board.getModule(Logging.class);
@@ -857,6 +1015,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                         } catch (UnsupportedModuleException e) {
                             e.printStackTrace();
                         }
+                        writeSensorLog("Board configured", _info, devicename);
                     } else if (first == 2) {
                         try {
 //                            board.deserializeState(state);
@@ -889,35 +1048,41 @@ public class ForegroundService extends Service implements ServiceConnection{
                                 }
                             }
 
-                            timer.schedule(new TimerTask() {
+                            TimerTask interrupt = new TimerTask() {
                                 @Override
                                 public void run() {
-                                   if (datalist.size()!=0) {
-                                       int totalApprox = (int) (total / (((int) (total/375.0)) * 1.0));
-                                       ArrayList<String> data = getFilteredDataCache((ArrayList<CartesianFloat>)datalist, dl_TS, totalApprox);
-                                       if (data.size() > 0) {
-                                           String json = getJSON(devicename, data);
-                                           Log.i(devicename, json);
-                                           postDataAsync task = new postDataAsync();
-                                           task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, json);
+                                    if (datalist.size() != 0) {
+                                        writeSensorLog("Download timed out", _info, devicename);
+                                        int totalApprox = (int) (total / (((int) (total / 375.0)) * 1.0));
+                                        ArrayList<String> data = getFilteredDataCache((ArrayList<CartesianFloat>) datalist, dl_TS, totalApprox);
+                                        if (data.size() > 0) {
+                                            String json = getJSON(devicename, data);
+                                            Log.i(devicename, json);
+                                            postDataAsync task = new postDataAsync();
+                                            task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, json);
 //                                           task.execute(json);
-                                       }
-                                       datalist.clear();
-                                       total = 0;
-                                       board.disconnect();
-                                       sensor_status = DISCONNECTED_OBJ;
-                                       broadcastStatus();
-                                   }
+                                        }
+                                        datalist.clear();
+                                        total = 0;
+                                        board.disconnect();
+                                        sensor_status = DISCONNECTED_OBJ;
+                                        broadcastStatus();
+                                    }
                                 }
-                            },30000);
+                            };
+                            timer.schedule(interrupt, 30000);
+                            final long remaining_space = logger.getLogCapacity();
                             logger.downloadLog(0.1f, new Logging.DownloadHandler() {
                                 @Override
                                 public void onProgressUpdate(int nEntriesLeft, int totalEntries) {
                                     Log.i("data", String.format("Progress: %d/%d", totalEntries - nEntriesLeft, totalEntries));
+                                    writeSensorLog(String.format("Download Progress: %d/%d", totalEntries - nEntriesLeft, totalEntries), _info, devicename);
                                     total = totalEntries;
                                     if (nEntriesLeft == 0) {
                                         Log.i("data", "Download Completed");
+                                        writeSensorLog("Download Completed", _success, devicename);
                                         Log.i("data", "Generated " + datalist.size() + " data points");
+                                        writeSensorLog("Generated " + datalist.size() + " data points", _success, devicename);
                                         //process listed data
                                         // send to server
                                         ArrayList<String> data = getFilteredDataCache((ArrayList<CartesianFloat>)datalist, dl_TS);
@@ -929,6 +1094,26 @@ public class ForegroundService extends Service implements ServiceConnection{
 //                                            task.execute(json);
                                         }
                                         datalist.clear();
+
+                                        if (total == 1 || remaining_space < 400) {
+                                            writeSensorLog("Available records: " + total + " Remaining space: " + remaining_space, _info, devicename);
+                                            writeSensorLog("No enough space on sensor, Reset", _error, devicename);
+                                            first = 1;
+                                            board.removeRoutes();
+                                            try {
+                                                Logging logger = board.getModule(Logging.class);
+                                                logger.stopLogging();
+                                                accel_module = board.getModule(Bmi160Accelerometer.class);
+                                                accel_module.stop();
+                                                accel_module.disableAxisSampling();
+                                                logger.clearEntries();
+                                            } catch (UnsupportedModuleException e) {
+                                                e.printStackTrace();
+                                            }
+                                            sensor_status = INITIATED;
+                                            broadcastStatus();
+                                        }
+
                                         total = 0;
 
                                         timer.schedule(new TimerTask() {
@@ -963,7 +1148,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                 @Override
                 public void disconnected() {
                     if (first != -1) {
-                        long interval = 235000 - (System.currentTimeMillis() - connectionAttemptTS);
+                        long interval = 235000 - (System.currentTimeMillis() - connectionAttemptTS) % 240000;
                         TimerTask reconnect = new TimerTask() {
                             @Override
                             synchronized public void run() {
@@ -975,10 +1160,12 @@ public class ForegroundService extends Service implements ServiceConnection{
                                 }
                                 stopBleScan();
                                 connectionAttemptTS = System.currentTimeMillis();
+                                writeSensorLog("Try to connect", _info, devicename);
                                 board.connect();
                             }
                         };
                         timer.schedule(reconnect, interval);
+                        writeSensorLog("Disconnected from the sensor and scheduled next connection in " + interval + " ms", _info, devicename);
                     }
                 }
 
@@ -986,6 +1173,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                 public void failure(int status, Throwable error) {
                     if (first != -1) {
                         error.printStackTrace();
+                        writeSensorLog(error.getMessage(), _error, devicename);
                         sensor_status = FAILURE;
                         broadcastStatus();
                         connectionFailureCount += 1;
@@ -1000,6 +1188,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                                 }
                                 stopBleScan();
 //                                connectionAttemptTS = System.currentTimeMillis();
+                                writeSensorLog("Try to connect", _info, devicename);
                                 board.connect();
                             }
                         };
@@ -1014,15 +1203,18 @@ public class ForegroundService extends Service implements ServiceConnection{
                                 }
                                 stopBleScan();
                                 connectionAttemptTS = System.currentTimeMillis();
+                                writeSensorLog("Try to connect", _info, devicename);
                                 board.connect();
                             }
                         };
                         if (connectionFailureCount < 2) {
                             timer.schedule(reconnect, 0);
+                            writeSensorLog("Reconnect attempt " + connectionFailureCount, _info, devicename);
                         } else {
                             connectionFailureCount = 0;
-                            long interval = 235000 - (System.currentTimeMillis() - connectionAttemptTS);
+                            long interval = 235000 - (System.currentTimeMillis() - connectionAttemptTS) % 240000;
                             timer.schedule(reconnect_long, interval);
+                            writeSensorLog("Skip this round, schedule to reconnect in " + interval + " ms", _info, devicename);
                         }
                     } else {
                         error.printStackTrace();
@@ -1039,6 +1231,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                                 }
                                 stopBleScan();
                                 connectionAttemptTS = System.currentTimeMillis();
+                                writeSensorLog("Try to connect", _info, devicename);
                                 board.connect();
                             }
                         };
@@ -1077,6 +1270,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                 @Override
                 public void connected() {
 //                    changeText(MAC_ADDRESS, CONNECTED);
+                    writeSensorLog("Sensor connected", _info, devicename);
                     sensor_status = CONNECTED;
                     broadcastStatus();
                     final MultiChannelTemperature mcTempModule;
@@ -1218,6 +1412,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                     if (!ActiveDisconnect) {
                         sensor_status = DISCONNECTED_BODY;
                         broadcastStatus();
+                        writeSensorLog("Connection dropped, try to reconnect", _info, devicename);
                         board.connect();
                     }
                 }
@@ -1225,6 +1420,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                 @Override
                 public void failure(int status, Throwable error) {
                     error.printStackTrace();
+                    writeSensorLog(error.getMessage(), _error, devicename);
                     sensor_status = FAILURE;
                     broadcastStatus();
                     if (dataCache.size() != 0) {
@@ -1241,6 +1437,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                             Log.i(devicename, jsonstr);
                         }
                     }
+                    writeSensorLog("Try to connect", _info, devicename);
                     board.connect();
                 }
             });
