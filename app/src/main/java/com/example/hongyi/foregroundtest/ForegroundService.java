@@ -190,11 +190,13 @@ public class ForegroundService extends Service implements ServiceConnection{
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent.getAction().equals(Constants.ACTION.STARTFOREGROUND_ACTION)) {
-            SENSOR_MAC.add(intent.getStringExtra("A"));
-            SENSOR_MAC.add(intent.getStringExtra("B"));
-            SENSOR_MAC.add(intent.getStringExtra("C"));
-            SENSOR_MAC.add(intent.getStringExtra("D"));
-            SENSOR_MAC.add(intent.getStringExtra("E"));
+            if (SENSOR_MAC.size() == 0) {
+                SENSOR_MAC.add(intent.getStringExtra("A"));
+                SENSOR_MAC.add(intent.getStringExtra("B"));
+                SENSOR_MAC.add(intent.getStringExtra("C"));
+                SENSOR_MAC.add(intent.getStringExtra("D"));
+                SENSOR_MAC.add(intent.getStringExtra("E"));
+            }
             Log.i(LOG_TAG, "Received Start Foreground Intent");
 //            writeSensorLog("Received Start Foreground Intent", _info);
             showNotification();
@@ -207,7 +209,7 @@ public class ForegroundService extends Service implements ServiceConnection{
             stopForeground(true);
             stopSelf();
         }
-        return START_STICKY;
+        return START_REDELIVER_INTENT;
     }
 
     private void showNotification() {
@@ -406,7 +408,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                     task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, data);
                 }
             }
-        }, 0, 20000);
+        }, 0, 500);
 
         MetaWearBleService.LocalBinder serviceBinder = (MetaWearBleService.LocalBinder) service;
 
@@ -514,6 +516,51 @@ public class ForegroundService extends Service implements ServiceConnection{
 
     }
 
+    public ArrayList<String> getJSONList (String name, ArrayList<String> data) {
+        ArrayList<String> dataLists = new ArrayList<>();
+        int start = 0;
+        while (start + 20 < data.size()) {
+            JSONObject jsonstring = new JSONObject();
+            JSONArray logs = new JSONArray();
+            try {
+                jsonstring.put("s", name);
+                for (String s : data.subList(start, start + 20)) {
+                    JSONObject temp = new JSONObject();
+                    temp.put("t", Double.valueOf(s.split(",")[0]));
+                    temp.put("x", Integer.valueOf(s.split(",")[1]));
+                    temp.put("y", Integer.valueOf(s.split(",")[2]));
+                    temp.put("z", Integer.valueOf(s.split(",")[3]));
+                    logs.put(temp);
+                }
+                jsonstring.put("logs", logs);
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+            dataLists.add(jsonstring.toString());
+            start += 20;
+        }
+        if (start < data.size()) {
+            JSONObject jsonstring = new JSONObject();
+            JSONArray logs = new JSONArray();
+            try {
+                jsonstring.put("s", name);
+                for (String s : data.subList(start, data.size())) {
+                    JSONObject temp = new JSONObject();
+                    temp.put("t", Double.valueOf(s.split(",")[0]));
+                    temp.put("x", Integer.valueOf(s.split(",")[1]));
+                    temp.put("y", Integer.valueOf(s.split(",")[2]));
+                    temp.put("z", Integer.valueOf(s.split(",")[3]));
+                    logs.put(temp);
+                }
+                jsonstring.put("logs", logs);
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+            dataLists.add(jsonstring.toString());
+        }
+        return dataLists;
+    }
+
     public String getJSON (String name, ArrayList<String> data) {
         JSONObject jsonstring = new JSONObject();
         JSONArray logs = new JSONArray();
@@ -568,53 +615,56 @@ public class ForegroundService extends Service implements ServiceConnection{
         protected String doInBackground(String... params) {
             ConnectivityManager connMgr = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
             NetworkInfo netInfo = connMgr.getActiveNetworkInfo();
+            HttpURLConnection conn = null;
             if (netInfo != null && netInfo.isConnected()) {
                 try {
                     URL url = new URL(urlbase);
-                    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                    try {
-                        conn.setRequestMethod("POST");
-                        conn.setRequestProperty("content-type", "application/json");
-                        conn.setRequestProperty("connection", "close");
-                        conn.setDoOutput(true);
-                        conn.setDoInput(true);
-                        conn.setUseCaches(false);
-                        conn.setChunkedStreamingMode(1024);
-                        conn.setInstanceFollowRedirects(true);
+                    conn = (HttpURLConnection) url.openConnection();
 
-                        OutputStream os = conn.getOutputStream();
-                        BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(os, "UTF-8"));
-                        writer.write(params[0]);
-                        writer.flush();
-                        writer.close();
-                        os.flush();
-                        os.close();
+                    conn.setRequestMethod("POST");
+                    conn.setRequestProperty("content-type", "application/json");
+                    conn.setRequestProperty("connection", "close");
+                    conn.setDoOutput(true);
+                    conn.setDoInput(true);
+                    conn.setUseCaches(false);
+                    conn.setChunkedStreamingMode(1024);
+                    conn.setInstanceFollowRedirects(true);
 
-                        int response = conn.getResponseCode();
-                        if (response == HttpURLConnection.HTTP_OK) {
-                            Log.i(LOG_TAG, "Post succeed: " + params[0]);
-                            InputStream is = conn.getInputStream();
-                            BufferedReader br = new BufferedReader(new InputStreamReader(is));
-                            String line = br.readLine();
-                            while(line!=null){
-                                Log.i("Http_response", line);
-                                writeSensorLog("HTTP Response: " + line.trim(), _success, "Data");
-                                line = br.readLine();
-                            }
-                        } else {
-                            Log.e(LOG_ERR, "Post error code: " + response + " " + params[0]);
-                            resendDataQueue.offer(params[0]);
-                            writeSensorLog("Post err code: " + response + " " + params[0].substring(0, 50), _error);
+                    OutputStream os = conn.getOutputStream();
+                    BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(os, "UTF-8"));
+                    writer.write(params[0]);
+                    writer.flush();
+                    writer.close();
+                    os.flush();
+                    os.close();
+
+                    int response = conn.getResponseCode();
+                    if (response == HttpURLConnection.HTTP_OK) {
+                        Log.i(LOG_TAG, "Post succeed: " + params[0]);
+                        InputStream is = conn.getInputStream();
+                        BufferedReader br = new BufferedReader(new InputStreamReader(is));
+                        String line = br.readLine();
+                        while(line!=null){
+                            Log.i("Http_response", line);
+                            writeSensorLog("HTTP Response: " + line.trim(), _success, "Data");
+                            line = br.readLine();
                         }
-                    } finally {
-                        conn.disconnect();
+                    } else {
+                        Log.e(LOG_ERR, "Post error code: " + response + " " + params[0]);
+                        resendDataQueue.offer(params[0]);
+                        writeSensorLog("Post err code: " + response + " " + params[0].substring(0, 50), _error);
                     }
+
                 } catch (MalformedURLException e) {
                     Log.e(LOG_ERR, "Illegal URL");
                 } catch (IOException e) {
                     Log.e(LOG_ERR, "Connection error " + e.getMessage() + " " + params[0]);
                     resendDataQueue.offer(params[0]);
                     writeSensorLog("Connection error: " + e.getMessage() + " " + params[0].substring(0, 50), _error);
+                } finally {
+                    if (conn != null) {
+                        conn.disconnect();
+                    }
                 }
             } else {
                 Log.e(LOG_ERR, "No active connection, add request back to queue");
