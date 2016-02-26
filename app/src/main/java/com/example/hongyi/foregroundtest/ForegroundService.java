@@ -68,6 +68,7 @@ import java.util.GregorianCalendar;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Queue;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -459,7 +460,7 @@ public class ForegroundService extends Service implements ServiceConnection{
             e.printStackTrace();
         }
 
-        // Change to Rotation
+        // Rotation connection
         java.util.Timer launch_queue = new java.util.Timer();
         launch_queue.schedule(new TimerTask() {
             @Override
@@ -765,7 +766,8 @@ public class ForegroundService extends Service implements ServiceConnection{
                 CONFIGURED = "Board configured.",
                 CONNECTING = "Connecting",
                 INITIATED = "Board reset",
-                LOG_TAG = "Board_Log";
+                LOG_TAG = "Board_Log",
+                DOWNLOAD_COMPLETED = "Data download completed";
         public Board() {}
         public ArrayList<String> filtering(ArrayList<String> dataCache, int thres, int interval) {
             ArrayList<String> filteredCache = new ArrayList<> ();
@@ -1019,6 +1021,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                     } else if (first == 2) {
                         try {
 //                            board.deserializeState(state);
+                            sensor_status = CONNECTED;
                             final Logging logger = board.getModule(Logging.class);
 //                            RouteManager route = board.getRouteManager(routeID);
 //                            route.setLogMessageHandler(SENSOR_DATA_LOG, loggingMessageHandler);
@@ -1033,7 +1036,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                                         public void success(Byte result) {
                                             // Send Battery Info
                                             battery = result.toString();
-                                            Log.i("battery_"+devicename, battery);
+                                            Log.i("battery_" + devicename, battery);
                                             String jsonstr = getJSON(devicename,String.format("%.3f", System.currentTimeMillis()/1000.0), Integer.valueOf(battery));
                                             postBatteryAsync task = new postBatteryAsync();
                                             task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, jsonstr);
@@ -1051,7 +1054,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                             TimerTask interrupt = new TimerTask() {
                                 @Override
                                 public void run() {
-                                    if (datalist.size() != 0) {
+                                    if (sensor_status.equals(CONNECTED)) {
                                         writeSensorLog("Download timed out", _info, devicename);
                                         int totalApprox = (int) (total / (((int) (total / 375.0)) * 1.0));
                                         ArrayList<String> data = getFilteredDataCache((ArrayList<CartesianFloat>) datalist, dl_TS, totalApprox);
@@ -1094,6 +1097,7 @@ public class ForegroundService extends Service implements ServiceConnection{
 //                                            task.execute(json);
                                         }
                                         datalist.clear();
+                                        sensor_status = DOWNLOAD_COMPLETED;
 
                                         if (total == 1 || remaining_space < 400) {
                                             writeSensorLog("Available records: " + total + " Remaining space: " + remaining_space, _info, devicename);
