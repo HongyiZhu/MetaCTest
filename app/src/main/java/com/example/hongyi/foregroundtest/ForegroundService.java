@@ -66,19 +66,20 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.GregorianCalendar;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
-import java.util.Objects;
 import java.util.Queue;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class ForegroundService extends Service implements ServiceConnection{
     private Timer servicetimer;
-    private Queue<String> resendDataQueue = new LinkedList<>();
-    private Queue<String> resendBatteryQueue = new LinkedList<>();
-    private Queue<String> resendTempQueue = new LinkedList<>();
+    private Queue<String> resendDataQueue = new ConcurrentLinkedQueue<>();
+    private Queue<String> resendBatteryQueue = new ConcurrentLinkedQueue<>();
+    private Queue<String> resendTempQueue = new ConcurrentLinkedQueue<>();
     private File log_file;
     private static final String LOG_TAG = "ForegroundService", LOG_ERR = "http_err";
     private static final String _info = "INF", _success = "SUC", _error = "ERR";
@@ -90,6 +91,7 @@ public class ForegroundService extends Service implements ServiceConnection{
     private HashSet<UUID> filterServiceUuids;
     private ArrayList<ScanFilter> api21ScanFilters;
     private final static UUID[] serviceUuids;
+    private static ExecutorService dataPool;
 
     public static boolean IS_SERVICE_RUNNING = false;
 
@@ -98,6 +100,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                 MetaWearBoard.METAWEAR_SERVICE_UUID,
                 MetaWearBoard.METABOOT_SERVICE_UUID
         };
+        dataPool = Executors.newCachedThreadPool();
     }
 
 
@@ -232,11 +235,11 @@ public class ForegroundService extends Service implements ServiceConnection{
                 .setContentIntent(pendingIntent)
                 .setOngoing(true).build();
         Log.i(LOG_TAG, "successfully build a notification");
-        writeSensorLog("successfully build a notification", _info);
+//        writeSensorLog("successfully build a notification", _info);
         startForeground(Constants.NOTIFICATION_ID.FOREGROUND_SERVICE,
                 notification);
         Log.i(LOG_TAG, "started foreground");
-        writeSensorLog("started foreground", _info);
+//        writeSensorLog("started foreground", _info);
 
     }
 
@@ -251,26 +254,26 @@ public class ForegroundService extends Service implements ServiceConnection{
         boards.get(0).board.disconnect();
         Log.i(LOG_TAG, "Body sensor destroyed");
         writeSensorLog("Body sensor destroyed", _info);
-        for (int i = 1; i < SENSOR_MAC.size(); i++) {
-            startBleScan();
-            try {
-                Thread.sleep(3000);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-            stopBleScan();
-
-            ObjectBoard mwBoard = (ObjectBoard) boards.get(i);
-            mwBoard.first = -1;
-            mwBoard.board.connect();
-            while (!mwBoard.destroyed) {
-                try {
-                    Thread.sleep(10000);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
+//        for (int i = 1; i < SENSOR_MAC.size(); i++) {
+//            startBleScan();
+//            try {
+//                Thread.sleep(3000);
+//            } catch (InterruptedException e) {
+//                e.printStackTrace();
+//            }
+//            stopBleScan();
+//
+//            ObjectBoard mwBoard = (ObjectBoard) boards.get(i);
+//            mwBoard.first = -1;
+//            mwBoard.board.connect();
+//            while (!mwBoard.destroyed) {
+//                try {
+//                    Thread.sleep(10000);
+//                } catch (InterruptedException e) {
+//                    e.printStackTrace();
+//                }
+//            }
+//        }
         super.onDestroy();
         getApplicationContext().unbindService(this);
         Log.i(LOG_TAG, "All destruction finished");
@@ -395,7 +398,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                 if (resendDataQueue.size() > 0) {
                     String data = resendDataQueue.poll();
                     postDataAsync task = new postDataAsync();
-                    task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, data);
+                    task.executeOnExecutor(dataPool, data);
                 }
                 if (resendBatteryQueue.size() > 0) {
                     String data = resendBatteryQueue.poll();
@@ -519,12 +522,13 @@ public class ForegroundService extends Service implements ServiceConnection{
     public ArrayList<String> getJSONList (String name, ArrayList<String> data) {
         ArrayList<String> dataLists = new ArrayList<>();
         int start = 0;
-        while (start + 20 < data.size()) {
+        int trunk_size = 20;
+        while (start + trunk_size <= data.size()) {
             JSONObject jsonstring = new JSONObject();
             JSONArray logs = new JSONArray();
             try {
                 jsonstring.put("s", name);
-                for (String s : data.subList(start, start + 20)) {
+                for (String s : data.subList(start, start + trunk_size)) {
                     JSONObject temp = new JSONObject();
                     temp.put("t", Double.valueOf(s.split(",")[0]));
                     temp.put("x", Integer.valueOf(s.split(",")[1]));
@@ -537,7 +541,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                 e.printStackTrace();
             }
             dataLists.add(jsonstring.toString());
-            start += 20;
+            start += trunk_size;
         }
         if (start < data.size()) {
             JSONObject jsonstring = new JSONObject();
@@ -610,7 +614,7 @@ public class ForegroundService extends Service implements ServiceConnection{
 
 
     public class postDataAsync extends AsyncTask<String, Boolean, String> {
-        String urlbase = "http://data.silverlink247.com/logs";
+        String urlbase = "http://io.silverlink247.com/logs";
         @Override
         protected String doInBackground(String... params) {
             ConnectivityManager connMgr = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
@@ -637,6 +641,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                     writer.close();
                     os.flush();
                     os.close();
+                    writeSensorLog(params[0].substring(80), _info, "Send Attempt");
 
                     int response = conn.getResponseCode();
                     if (response == HttpURLConnection.HTTP_OK) {
@@ -652,7 +657,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                     } else {
                         Log.e(LOG_ERR, "Post error code: " + response + " " + params[0]);
                         resendDataQueue.offer(params[0]);
-                        writeSensorLog("Post err code: " + response + " " + params[0].substring(0, 50), _error);
+                        writeSensorLog("Post err code: " + response + " " + params[0].substring(0, 80), _error);
                     }
 
                 } catch (MalformedURLException e) {
@@ -660,7 +665,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                 } catch (IOException e) {
                     Log.e(LOG_ERR, "Connection error " + e.getMessage() + " " + params[0]);
                     resendDataQueue.offer(params[0]);
-                    writeSensorLog("Connection error: " + e.getMessage() + " " + params[0].substring(0, 50), _error);
+                    writeSensorLog("Connection error: " + e.getMessage() + " " + params[0].substring(0, 80), _error);
                 } finally {
                     if (conn != null) {
                         conn.disconnect();
@@ -669,7 +674,7 @@ public class ForegroundService extends Service implements ServiceConnection{
             } else {
                 Log.e(LOG_ERR, "No active connection, add request back to queue");
                 resendDataQueue.offer(params[0]);
-                writeSensorLog("No active connection, add to wait queue: " + params[0].substring(0, 50), _error);
+                writeSensorLog("No active connection, add to wait queue: " + params[0].substring(0, 80), _error);
             }
             return null;
         }
@@ -702,6 +707,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                         writer.close();
                         os.flush();
                         os.close();
+                        writeSensorLog(params[0], _info, "Send Attempt");
 
                         int response = conn.getResponseCode();
                         if (response == HttpURLConnection.HTTP_OK) {
@@ -717,7 +723,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                         } else {
                             Log.e(LOG_ERR, "Post error code: " + response + " " + params[0]);
                             resendTempQueue.offer(params[0]);
-                            writeSensorLog("Post err code: " + response + " " + params[0].substring(0, 50), _error);
+                            writeSensorLog("Post err code: " + response + " " + params[0], _error);
                         }
                     } finally {
                         conn.disconnect();
@@ -727,12 +733,12 @@ public class ForegroundService extends Service implements ServiceConnection{
                 } catch (IOException e) {
                     Log.e(LOG_ERR, "Connection error " + e.getMessage() + " " + params[0]);
                     resendTempQueue.offer(params[0]);
-                    writeSensorLog("Connection error: " + e.getMessage() + " " + params[0].substring(0, 50), _error);
+                    writeSensorLog("Connection error: " + e.getMessage() + " " + params[0], _error);
                 }
             } else {
                 Log.e(LOG_ERR, "No active connection");
                 resendTempQueue.offer(params[0]);
-                writeSensorLog("No active connection, add to wait queue: " + params[0].substring(0, 50), _error);
+                writeSensorLog("No active connection, add to wait queue: " + params[0], _error);
             }
             return null;
         }
@@ -765,6 +771,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                         writer.close();
                         os.flush();
                         os.close();
+                        writeSensorLog(params[0], _info, "Send Attempt");
 
                         int response = conn.getResponseCode();
                         if (response == HttpURLConnection.HTTP_OK) {
@@ -780,7 +787,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                         } else {
                             Log.e(LOG_ERR, "Post error code: " + response + " " + params[0]);
                             resendBatteryQueue.offer(params[0]);
-                            writeSensorLog("Post err code: " + response + " " + params[0].substring(0, 50), _error);
+                            writeSensorLog("Post err code: " + response + " " + params[0], _error);
                         }
                     } finally {
                         conn.disconnect();
@@ -790,12 +797,12 @@ public class ForegroundService extends Service implements ServiceConnection{
                 } catch (IOException e) {
                     Log.e(LOG_ERR, "Connection error " + e.getMessage() + " " + params[0]);
                     resendBatteryQueue.offer(params[0]);
-                    writeSensorLog("Connection error: " + e.getMessage() + " " + params[0].substring(0, 50), _error);
+                    writeSensorLog("Connection error: " + e.getMessage() + " " + params[0], _error);
                 }
             } else {
                 Log.e(LOG_ERR, "No active connection");
                 resendBatteryQueue.offer(params[0]);
-                writeSensorLog("No active connection, add to wait queue: " + params[0].substring(0, 50), _error);
+                writeSensorLog("No active connection, add to wait queue: " + params[0], _error);
             }
             return null;
         }
@@ -1109,11 +1116,15 @@ public class ForegroundService extends Service implements ServiceConnection{
                                         int totalApprox = (int) (total / (((int) (total / 375.0)) * 1.0));
                                         ArrayList<String> data = getFilteredDataCache((ArrayList<CartesianFloat>) datalist, dl_TS, totalApprox);
                                         if (data.size() > 0) {
-                                            String json = getJSON(devicename, data);
-                                            Log.i(devicename, json);
-                                            postDataAsync task = new postDataAsync();
-                                            task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, json);
-//                                           task.execute(json);
+                                            ArrayList<String> data_array = getJSONList(devicename, data);
+                                            for (String s : data_array) {
+                                                resendDataQueue.offer(s);
+                                            }
+//                                            String json = getJSON(devicename, data);
+//                                            Log.i(devicename, json);
+//                                            postDataAsync task = new postDataAsync();
+//                                            task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, json);
+//                                            task.execute(json);
                                         }
                                         datalist.clear();
                                         total = 0;
@@ -1140,10 +1151,14 @@ public class ForegroundService extends Service implements ServiceConnection{
                                         // send to server
                                         ArrayList<String> data = getFilteredDataCache((ArrayList<CartesianFloat>)datalist, dl_TS);
                                         if (data.size() > 0) {
-                                            String json = getJSON(devicename, data);
-                                            Log.i(devicename, json);
-                                            postDataAsync task = new postDataAsync();
-                                            task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, json);
+                                            ArrayList<String> data_array = getJSONList(devicename, data);
+                                            for (String s : data_array) {
+                                                resendDataQueue.offer(s);
+                                            }
+//                                            String json = getJSON(devicename, data);
+//                                            Log.i(devicename, json);
+//                                            postDataAsync task = new postDataAsync();
+//                                            task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, json);
 //                                            task.execute(json);
                                         }
                                         datalist.clear();
@@ -1359,12 +1374,15 @@ public class ForegroundService extends Service implements ServiceConnection{
                                                     dataCount = 0;
                                                     ArrayList<String> filteredCache = filtering(temp, 32, 3);
                                                     if (filteredCache.size() > 0) {
-                                                        String jsonstr = getJSON(devicename, filteredCache);
-                                                        //switch to send
-                                                        postDataAsync task = new postDataAsync();
-                                                        task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, jsonstr);
+                                                        ArrayList<String> data_array = getJSONList(devicename, filteredCache);
+                                                        for (String s : data_array) {
+                                                            resendDataQueue.offer(s);
+                                                        }
+//                                                        String jsonstr = getJSON(devicename, filteredCache);
+//                                                        postDataAsync task = new postDataAsync();
+//                                                        task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, jsonstr);
 //                                                        task.execute(jsonstr);
-                                                        Log.i(devicename, jsonstr);
+//                                                        Log.i(devicename, jsonstr);
                                                     }
 //                                                    Log.i(LOG_ERR, getJSON(devicename, filtering(temp, 10, 3)));
                                                 }
@@ -1456,11 +1474,15 @@ public class ForegroundService extends Service implements ServiceConnection{
                         dataCount = 0;
                         ArrayList<String> filteredCache = filtering(temp, 32, 3);
                         if (filteredCache.size() != 0) {
-                            String jsonstr = getJSON(devicename, filteredCache);
-                            postDataAsync task = new postDataAsync();
-                            task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, jsonstr);
+                            ArrayList<String> data_array = getJSONList(devicename, filteredCache);
+                            for (String s : data_array) {
+                                resendDataQueue.offer(s);
+                            }
+//                            String jsonstr = getJSON(devicename, filteredCache);
+//                            postDataAsync task = new postDataAsync();
+//                            task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, jsonstr);
 //                            task.execute(jsonstr);
-                            Log.i(devicename, jsonstr);
+//                            Log.i(devicename, jsonstr);
                         }
                     }
                     if (!ActiveDisconnect) {
@@ -1484,11 +1506,15 @@ public class ForegroundService extends Service implements ServiceConnection{
                         dataCount = 0;
                         ArrayList<String> filteredCache = filtering(temp, 32, 3);
                         if (filteredCache.size() != 0) {
-                            String jsonstr = getJSON(devicename, filteredCache);
-                            postDataAsync task = new postDataAsync();
-                            task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, jsonstr);
+                            ArrayList<String> data_array = getJSONList(devicename, filteredCache);
+                            for (String s : data_array) {
+                                resendDataQueue.offer(s);
+                            }
+//                            String jsonstr = getJSON(devicename, filteredCache);
+//                            postDataAsync task = new postDataAsync();
+//                            task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, jsonstr);
 //                            task.execute(jsonstr);
-                            Log.i(devicename, jsonstr);
+//                            Log.i(devicename, jsonstr);
                         }
                     }
                     writeSensorLog("Try to connect", _info, devicename);
