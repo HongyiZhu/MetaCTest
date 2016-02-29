@@ -1375,6 +1375,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                     broadcastStatus();
                     final MultiChannelTemperature mcTempModule;
                     try {
+                        //TODO: Work on adjusting sample rate
                         accel_module = board.getModule(Bmi160Accelerometer.class);
                         accel_module.setOutputDataRate(sampleFreq);
                         accel_module.routeData().fromAxes().stream(SENSOR_DATA_LOG).commit()
@@ -1424,26 +1425,6 @@ public class ForegroundService extends Service implements ServiceConnection{
                                                     dataCache.add(String.format("%.3f", timestamp_in_seconds) + "," + String.valueOf(x_int) +
                                                             "," + String.valueOf(y_int) + "," + String.valueOf(z_int));
                                                 }
-//                                                if (dataCache.size() >= uploadCount) {
-//                                                    ArrayList<String> temp = new ArrayList<>(dataCache);
-//                                                    dataCache.clear();
-//                                                    startTimestamp[0] = System.currentTimeMillis();
-//                                                    dataCount = 0;
-//                                                    ArrayList<String> filteredCache = filtering(previousCache, temp, 32, 3);
-//                                                    previousCache = new ArrayList<String>(temp);
-//                                                    if (filteredCache.size() > 0) {
-//                                                        ArrayList<String> data_array = getJSONList(devicename, filteredCache);
-//                                                        for (String s : data_array) {
-//                                                            resendDataQueue.offer(s);
-//                                                        }
-//    //                                                        String jsonstr = getJSON(devicename, filteredCache);
-//    //                                                        postDataAsync task = new postDataAsync();
-//    //                                                        task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, jsonstr);
-//    //                                                        task.execute(jsonstr);
-//    //                                                        Log.i(devicename, jsonstr);
-//                                                    }
-//    //                                                    Log.i(LOG_ERR, getJSON(devicename, filtering(temp, 10, 3)));
-//                                                }
                                             }
                                         });
                                     }
