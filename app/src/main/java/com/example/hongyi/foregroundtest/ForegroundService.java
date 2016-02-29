@@ -53,6 +53,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
+import java.lang.reflect.Array;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -92,6 +93,7 @@ public class ForegroundService extends Service implements ServiceConnection{
     private ArrayList<ScanFilter> api21ScanFilters;
     private final static UUID[] serviceUuids;
     private static ExecutorService dataPool;
+    private boolean keepAlive = false;
 
     public static boolean IS_SERVICE_RUNNING = false;
 
@@ -395,17 +397,17 @@ public class ForegroundService extends Service implements ServiceConnection{
         servicetimer.schedule(new TimerTask() {
             @Override
             public void run() {
-                if (resendDataQueue.size() > 0) {
+                if (!resendDataQueue.isEmpty()) {
                     String data = resendDataQueue.poll();
                     postDataAsync task = new postDataAsync();
                     task.executeOnExecutor(dataPool, data);
                 }
-                if (resendBatteryQueue.size() > 0) {
+                if (!resendBatteryQueue.isEmpty()) {
                     String data = resendBatteryQueue.poll();
                     postBatteryAsync task = new postBatteryAsync();
                     task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, data);
                 }
-                if (resendTempQueue.size() > 0) {
+                if (!resendTempQueue.isEmpty()) {
                     String data = resendTempQueue.poll();
                     postTempAsync task = new postTempAsync();
                     task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, data);
@@ -522,7 +524,7 @@ public class ForegroundService extends Service implements ServiceConnection{
     public ArrayList<String> getJSONList (String name, ArrayList<String> data) {
         ArrayList<String> dataLists = new ArrayList<>();
         int start = 0;
-        int trunk_size = 20;
+        int trunk_size = 40;
         while (start + trunk_size <= data.size()) {
             JSONObject jsonstring = new JSONObject();
             JSONArray logs = new JSONArray();
@@ -627,11 +629,14 @@ public class ForegroundService extends Service implements ServiceConnection{
 
                     conn.setRequestMethod("POST");
                     conn.setRequestProperty("content-type", "application/json");
-                    conn.setRequestProperty("connection", "close");
+                    if (!keepAlive) {
+                        conn.setRequestProperty("connection", "close");
+                    }
+                    conn.setRequestProperty("Accept-Encoding", "");
                     conn.setDoOutput(true);
                     conn.setDoInput(true);
                     conn.setUseCaches(false);
-                    conn.setChunkedStreamingMode(1024);
+//                    conn.setChunkedStreamingMode(1024);
                     conn.setInstanceFollowRedirects(true);
 
                     OutputStream os = conn.getOutputStream();
@@ -641,7 +646,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                     writer.close();
                     os.flush();
                     os.close();
-                    writeSensorLog(params[0].substring(80), _info, "Send Attempt");
+                    writeSensorLog(params[0].length()>80 ? params[0].substring(80) : params[0], _info, "Send Attempt");
 
                     int response = conn.getResponseCode();
                     if (response == HttpURLConnection.HTTP_OK) {
@@ -663,7 +668,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                 } catch (MalformedURLException e) {
                     Log.e(LOG_ERR, "Illegal URL");
                 } catch (IOException e) {
-                    Log.e(LOG_ERR, "Connection error " + e.getMessage() + " " + params[0]);
+                    Log.e(LOG_ERR, "Connection error " + ((e.getMessage() == null) ? e : e.getMessage()) + " " + params[0]);
                     resendDataQueue.offer(params[0]);
                     writeSensorLog("Connection error: " + e.getMessage() + " " + params[0].substring(0, 80), _error);
                 } finally {
@@ -693,11 +698,14 @@ public class ForegroundService extends Service implements ServiceConnection{
                     try {
                         conn.setRequestMethod("POST");
                         conn.setRequestProperty("content-type", "application/json");
-                        conn.setRequestProperty("connection", "close");
+                        if (!keepAlive) {
+                            conn.setRequestProperty("connection", "close");
+                        }
                         conn.setDoOutput(true);
                         conn.setDoInput(true);
                         conn.setUseCaches(false);
-                        conn.setChunkedStreamingMode(1024);
+                        conn.setRequestProperty("Accept-Encoding", "");
+//                        conn.setChunkedStreamingMode(1024);
                         conn.setInstanceFollowRedirects(true);
 
                         OutputStream os = conn.getOutputStream();
@@ -757,11 +765,14 @@ public class ForegroundService extends Service implements ServiceConnection{
                     try {
                         conn.setRequestMethod("POST");
                         conn.setRequestProperty("content-type", "application/json");
-                        conn.setRequestProperty("connection", "close");
+                        if (!keepAlive) {
+                            conn.setRequestProperty("connection", "close");
+                        }
                         conn.setDoOutput(true);
                         conn.setDoInput(true);
                         conn.setUseCaches(false);
-                        conn.setChunkedStreamingMode(1024);
+                        conn.setRequestProperty("Accept-Encoding", "");
+//                        conn.setChunkedStreamingMode(1024);
                         conn.setInstanceFollowRedirects(true);
 
                         OutputStream os = conn.getOutputStream();
@@ -826,16 +837,28 @@ public class ForegroundService extends Service implements ServiceConnection{
                 LOG_TAG = "Board_Log",
                 DOWNLOAD_COMPLETED = "Data download completed";
         public Board() {}
-        public ArrayList<String> filtering(ArrayList<String> dataCache, int thres, int interval) {
+
+        public ArrayList<String> filtering(ArrayList<String> previousCache, ArrayList<String> dataCache, int thres, int interval) {
             ArrayList<String> filteredCache = new ArrayList<> ();
             if (dataCache.size() == 0) {
                 return filteredCache;
             }
-            String[] f0 = dataCache.get(0).split(",");
-            float last_ts = 0;
-            int prev_x = Integer.valueOf(f0[1]);
-            int prev_y = Integer.valueOf(f0[2]);
-            int prev_z = Integer.valueOf(f0[3]);
+            float last_ts;
+            int prev_x, prev_y, prev_z;
+            if (previousCache.size() == 0) {
+                String[] f0 = dataCache.get(0).split(",");
+                last_ts = 0;
+                prev_x = Integer.valueOf(f0[1]);
+                prev_y = Integer.valueOf(f0[2]);
+                prev_z = Integer.valueOf(f0[3]);
+            } else {
+                String[] f0 = previousCache.get(previousCache.size() - 1).split(",");
+                last_ts = 0;
+                prev_x = Integer.valueOf(f0[1]);
+                prev_y = Integer.valueOf(f0[2]);
+                prev_z = Integer.valueOf(f0[3]);
+//                Log.i("filter","previousCache with last_ts " + last_ts + ", x " + prev_x + ", y " + prev_y + ", z " + prev_z);
+            }
             for (int i = 1; i < dataCache.size(); i++) {
                 String s = dataCache.get(i);
                 String[] fields = s.split(",");
@@ -845,13 +868,20 @@ public class ForegroundService extends Service implements ServiceConnection{
                 int z = Integer.valueOf(fields[3]);
                 if (Math.abs(ts - last_ts) <= interval || Math.abs(x - prev_x) >= thres || Math.abs(y - prev_y) >= thres || Math.abs(z - prev_z) >= thres) {
                     filteredCache.add(s);
+                    if (Math.abs(x - prev_x) >= thres || Math.abs(y - prev_y) >= thres || Math.abs(z - prev_z) >= thres) {
+//                        Log.i("filter","Last timestamp updated from " + last_ts + " to " + ts);
+                        last_ts = ts;
+                    }
                     prev_x = x;
                     prev_y = y;
                     prev_z = z;
-                    last_ts = ts;
                 }
             }
             return filteredCache;
+        }
+
+        public ArrayList<String> filtering(ArrayList<String> dataCache, int thres, int interval) {
+            return filtering(new ArrayList<String>(), dataCache, thres, interval);
         }
 
         public void broadcastStatus() {
@@ -879,7 +909,6 @@ public class ForegroundService extends Service implements ServiceConnection{
         private String devicename;
         private final String SENSOR_DATA_LOG;
         private int first = 0;
-//        private byte[] state = null;
         private List<CartesianFloat> datalist = null;
         private int routeID = 0;
         boolean configured = false;
@@ -888,7 +917,6 @@ public class ForegroundService extends Service implements ServiceConnection{
         java.util.Timer timer;
         private long infoTS = 0;
         boolean destroyed = false;
-//        boolean started = false;
         int total = 0;
 
         private final RouteManager.MessageHandler loggingMessageHandler = new RouteManager.MessageHandler() {
@@ -1314,10 +1342,12 @@ public class ForegroundService extends Service implements ServiceConnection{
     public class BodyBoard extends Board{
         public long[] startTimestamp;
         public ArrayList<String> dataCache;
+        private ArrayList<String> workCache;
+        public ArrayList<String> previousCache;
         public int dataCount;
         private float sampleFreq;
         private int uploadCount;
-        private float sampleInterval;
+        private int sampleInterval;
         private final String devicename;
         private long temperature_timestamp;
 
@@ -1326,10 +1356,11 @@ public class ForegroundService extends Service implements ServiceConnection{
             this.MAC_ADDRESS = MAC;
             this.dataCount = 0;
             this.dataCache = new ArrayList<>();
+            this.previousCache = new ArrayList<>();
             this.startTimestamp = new long[1];
             this.sampleFreq = freq;
             this.uploadCount = (int) (8 * sampleFreq);
-            this.sampleInterval = 1000 / sampleFreq;
+            this.sampleInterval = (int) (1000 / sampleFreq);
             this.devicename = MAC_ADDRESS.replace(":", "");
             this.sensor_status = CONNECTING;
             this.temperature_timestamp = 0;
@@ -1344,7 +1375,6 @@ public class ForegroundService extends Service implements ServiceConnection{
                     broadcastStatus();
                     final MultiChannelTemperature mcTempModule;
                     try {
-                        startTimestamp[0] = System.currentTimeMillis();
                         accel_module = board.getModule(Bmi160Accelerometer.class);
                         accel_module.setOutputDataRate(sampleFreq);
                         accel_module.routeData().fromAxes().stream(SENSOR_DATA_LOG).commit()
@@ -1354,38 +1384,66 @@ public class ForegroundService extends Service implements ServiceConnection{
                                         result.subscribe(SENSOR_DATA_LOG, new RouteManager.MessageHandler() {
                                             @Override
                                             public void process(Message message) {
-                                                dataCount += 1;
-                                                long timestamp = startTimestamp[0] + (long) (dataCount * sampleInterval);
-                                                double timestamp_in_seconds = timestamp / 1000.0;
-                                                CartesianFloat result = message.getData(CartesianFloat.class);
-                                                float x = result.x();
-                                                int x_int = (int) (x * 1000);
-                                                float y = result.y();
-                                                int y_int = (int) (y * 1000);
-                                                float z = result.z();
-                                                int z_int = (int) (z * 1000);
-                                                dataCache.add(String.format("%.3f", timestamp_in_seconds) + "," + String.valueOf(x_int) +
-                                                        "," + String.valueOf(y_int) + "," + String.valueOf(z_int));
-//                                                Log.i(SENSOR_DATA_LOG, String.valueOf(dataCount));
-                                                if (dataCache.size() >= uploadCount) {
-                                                    ArrayList<String> temp = new ArrayList<>(dataCache);
-                                                    dataCache.clear();
+                                                if (dataCache.size() == uploadCount) {
                                                     startTimestamp[0] = System.currentTimeMillis();
+                                                    workCache = dataCache;
+                                                    dataCache = new ArrayList<>();
                                                     dataCount = 0;
-                                                    ArrayList<String> filteredCache = filtering(temp, 32, 3);
+                                                    long timestamp = startTimestamp[0] + (long) (dataCount * sampleInterval);
+                                                    double timestamp_in_seconds = timestamp / 1000.0;
+                                                    CartesianFloat result = message.getData(CartesianFloat.class);
+                                                    float x = result.x();
+                                                    int x_int = (int) (x * 1000);
+                                                    float y = result.y();
+                                                    int y_int = (int) (y * 1000);
+                                                    float z = result.z();
+                                                    int z_int = (int) (z * 1000);
+                                                    dataCache.add(String.format("%.3f", timestamp_in_seconds) + "," + String.valueOf(x_int) +
+                                                            "," + String.valueOf(y_int) + "," + String.valueOf(z_int));
+
+                                                    ArrayList<String> filteredCache = filtering(previousCache, workCache, 32, 3);
+                                                    previousCache = new ArrayList<>(workCache);
+                                                    workCache.clear();
                                                     if (filteredCache.size() > 0) {
                                                         ArrayList<String> data_array = getJSONList(devicename, filteredCache);
                                                         for (String s : data_array) {
                                                             resendDataQueue.offer(s);
                                                         }
-//                                                        String jsonstr = getJSON(devicename, filteredCache);
-//                                                        postDataAsync task = new postDataAsync();
-//                                                        task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, jsonstr);
-//                                                        task.execute(jsonstr);
-//                                                        Log.i(devicename, jsonstr);
                                                     }
-//                                                    Log.i(LOG_ERR, getJSON(devicename, filtering(temp, 10, 3)));
+                                                } else {
+                                                    dataCount += 1;
+                                                    long timestamp = startTimestamp[0] + (long) (dataCount * sampleInterval);
+                                                    double timestamp_in_seconds = timestamp / 1000.0;
+                                                    CartesianFloat result = message.getData(CartesianFloat.class);
+                                                    float x = result.x();
+                                                    int x_int = (int) (x * 1000);
+                                                    float y = result.y();
+                                                    int y_int = (int) (y * 1000);
+                                                    float z = result.z();
+                                                    int z_int = (int) (z * 1000);
+                                                    dataCache.add(String.format("%.3f", timestamp_in_seconds) + "," + String.valueOf(x_int) +
+                                                            "," + String.valueOf(y_int) + "," + String.valueOf(z_int));
                                                 }
+//                                                if (dataCache.size() >= uploadCount) {
+//                                                    ArrayList<String> temp = new ArrayList<>(dataCache);
+//                                                    dataCache.clear();
+//                                                    startTimestamp[0] = System.currentTimeMillis();
+//                                                    dataCount = 0;
+//                                                    ArrayList<String> filteredCache = filtering(previousCache, temp, 32, 3);
+//                                                    previousCache = new ArrayList<String>(temp);
+//                                                    if (filteredCache.size() > 0) {
+//                                                        ArrayList<String> data_array = getJSONList(devicename, filteredCache);
+//                                                        for (String s : data_array) {
+//                                                            resendDataQueue.offer(s);
+//                                                        }
+//    //                                                        String jsonstr = getJSON(devicename, filteredCache);
+//    //                                                        postDataAsync task = new postDataAsync();
+//    //                                                        task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, jsonstr);
+//    //                                                        task.execute(jsonstr);
+//    //                                                        Log.i(devicename, jsonstr);
+//                                                    }
+//    //                                                    Log.i(LOG_ERR, getJSON(devicename, filtering(temp, 10, 3)));
+//                                                }
                                             }
                                         });
                                     }
@@ -1472,7 +1530,8 @@ public class ForegroundService extends Service implements ServiceConnection{
                         dataCache.clear();
                         startTimestamp[0] = System.currentTimeMillis();
                         dataCount = 0;
-                        ArrayList<String> filteredCache = filtering(temp, 32, 3);
+                        ArrayList<String> filteredCache = filtering(previousCache, temp, 32, 3);
+                        previousCache = new ArrayList<String>(temp);
                         if (filteredCache.size() != 0) {
                             ArrayList<String> data_array = getJSONList(devicename, filteredCache);
                             for (String s : data_array) {
@@ -1504,7 +1563,8 @@ public class ForegroundService extends Service implements ServiceConnection{
                         dataCache.clear();
                         startTimestamp[0] = System.currentTimeMillis();
                         dataCount = 0;
-                        ArrayList<String> filteredCache = filtering(temp, 32, 3);
+                        ArrayList<String> filteredCache = filtering(previousCache, temp, 32, 3);
+                        previousCache = new ArrayList<String>(temp);
                         if (filteredCache.size() != 0) {
                             ArrayList<String> data_array = getJSONList(devicename, filteredCache);
                             for (String s : data_array) {
