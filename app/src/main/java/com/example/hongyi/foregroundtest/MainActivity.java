@@ -26,11 +26,17 @@ import org.json.JSONObject;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.ObjectOutputStream;
 import java.io.OutputStream;
+import java.io.OutputStreamWriter;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.ProtocolException;
@@ -115,7 +121,13 @@ public class MainActivity extends AppCompatActivity{
             final Handler mHandler = new Handler() {
                 @Override
                 public void handleMessage(android.os.Message msg) {
+                    BufferedWriter bw = null;
                     String res = (String) msg.obj;
+                    String address = (getApplicationContext().getExternalFilesDirs("")[0].getAbsolutePath()).contains("external_SD") ? getApplicationContext().getExternalFilesDirs("")[1].getAbsolutePath() : getApplicationContext().getExternalFilesDirs("")[0].getAbsolutePath();
+                    File folder = new File(address);
+                    if (!folder.exists()) {
+                        folder.mkdirs();
+                    }
                     Intent service = new Intent(MainActivity.this, ForegroundService.class);
                     service.setAction(Constants.ACTION.STARTFOREGROUND_ACTION);
                     try {
@@ -133,6 +145,24 @@ public class MainActivity extends AppCompatActivity{
                     }
                     IS_SERVICE_RUNNING = true;
                     startService(service);
+                    File config_file = new File(folder, "config.ini");
+                    config_file.setReadable(true);
+                    config_file.setWritable(true);
+                    try {
+                        bw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(config_file)));
+                        bw.write(res);
+                        bw.flush();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    } finally {
+                        try {
+                            if (bw != null) {
+                                bw.close();
+                            }
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    }
                 }
             };
 
