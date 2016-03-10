@@ -901,6 +901,7 @@ public class ForegroundService extends Service implements ServiceConnection{
         public String battery;
         public boolean needs_to_reboot;
         public final String CONNECTED = "Connected.\nStreaming Data",
+                AWAY = "Sensor out of range",
                 DISCONNECTED_BODY = "Lost connection.\nReconnecting",
                 DISCONNECTED_OBJ = "Download finished.",
                 FAILURE = "Connection error.\nReconnecting",
@@ -1420,6 +1421,9 @@ public class ForegroundService extends Service implements ServiceConnection{
         private final String devicename;
         private long temperature_timestamp;
         private long battery_timestamp;
+        private java.util.Timer searchTM;
+        private boolean away;
+        private int reconnect_count;
 
         public BodyBoard(MetaWearBoard mxBoard, final String MAC, float freq) {
             this.board = mxBoard;
@@ -1435,12 +1439,20 @@ public class ForegroundService extends Service implements ServiceConnection{
             this.sensor_status = CONNECTING;
             this.temperature_timestamp = 0;
             this.battery_timestamp = 0;
+            this.away = false;
             final String SENSOR_DATA_LOG = "Data:Sensor:" + MAC_ADDRESS;
 
             this.board.setConnectionStateHandler(new MetaWearBoard.ConnectionStateHandler() {
                 @Override
                 public void connected() {
 //                    changeText(MAC_ADDRESS, CONNECTED);
+                    reconnect_count = 0;
+                    if (searchTM != null) {
+                        searchTM.cancel();
+                        searchTM.purge();
+                        searchTM = null;
+                    }
+                    away = false;
                     writeSensorLog("Sensor connected", _info, devicename);
                     sensor_status = CONNECTED;
                     broadcastStatus();
@@ -1551,7 +1563,6 @@ public class ForegroundService extends Service implements ServiceConnection{
                                                             String jsonstr = getJSON(devicename, String.format("%.3f", System.currentTimeMillis() / 1000.0), Integer.valueOf(result.toString()));
                                                             postBatteryAsync task = new postBatteryAsync();
                                                             task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, jsonstr);
-//                                                            task.execute(jsonstr);
                                                         }
                                                     }
                                                 });
@@ -1594,31 +1605,51 @@ public class ForegroundService extends Service implements ServiceConnection{
 
                 @Override
                 public void failure(int status, Throwable error) {
-                    error.printStackTrace();
-                    writeSensorLog(error.getMessage(), _error, devicename);
-                    sensor_status = FAILURE;
-                    broadcastStatus();
-                    if (dataCache.size() != 0) {
-                        ArrayList<String> temp = new ArrayList<> (dataCache);
-                        dataCache.clear();
-                        startTimestamp[0] = System.currentTimeMillis();
-                        dataCount = 0;
-                        ArrayList<String> filteredCache = filtering(previousCache, temp, 32, 3);
-                        previousCache = new ArrayList<String>(temp);
-                        if (filteredCache.size() != 0) {
-                            ArrayList<String> data_array = getJSONList(devicename, filteredCache);
-                            for (String s : data_array) {
-                                resendDataQueue.offer(s);
-                            }
-//                            String jsonstr = getJSON(devicename, filteredCache);
-//                            postDataAsync task = new postDataAsync();
-//                            task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, jsonstr);
-//                            task.execute(jsonstr);
-//                            Log.i(devicename, jsonstr);
+                    reconnect_count += 1;
+                    if (!away && reconnect_count <= 5) {
+                        if (searchTM != null) {
+                            searchTM.cancel();
+                            searchTM.purge();
+                            searchTM = null;
                         }
+                        error.printStackTrace();
+                        writeSensorLog(error.getMessage(), _error, devicename);
+                        sensor_status = FAILURE;
+                        broadcastStatus();
+                        if (dataCache.size() != 0) {
+                            ArrayList<String> temp = new ArrayList<>(dataCache);
+                            dataCache.clear();
+                            startTimestamp[0] = System.currentTimeMillis();
+                            dataCount = 0;
+                            ArrayList<String> filteredCache = filtering(previousCache, temp, 32, 3);
+                            previousCache = new ArrayList<String>(temp);
+                            if (filteredCache.size() != 0) {
+                                ArrayList<String> data_array = getJSONList(devicename, filteredCache);
+                                for (String s : data_array) {
+                                    resendDataQueue.offer(s);
+                                }
+                            }
+                        }
+                        writeSensorLog("Try to connect", _info, devicename);
+                        board.connect();
+                    } else {
+                        searchTM = new Timer();
+                        reconnect_count = 0;
+                        searchTM.schedule(new TimerTask() {
+                            @Override
+                            public void run() {
+                                Set<String> nearMW = scanBle(8000);
+                                if (nearMW.contains(SENSOR_MAC.get(0))) {
+                                    away = false;
+                                    board.connect();
+                                } else {
+                                    away = true;
+                                    sensor_status = AWAY;
+                                    broadcastStatus();
+                                }
+                            }
+                        }, 0, 120000);
                     }
-                    writeSensorLog("Try to connect", _info, devicename);
-                    board.connect();
                 }
             });
         }
