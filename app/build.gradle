@@ -21,10 +21,13 @@ android {
                             def newName = output.outputFile.name
                             newName = newName.replace("app-", "$project.ext.appName-")
                             newName = newName.replace("-release", "")
-                            //noinspection GroovyAssignabilityCheck
                             output.outputFile = new File(output.outputFile.parent, newName)
                         }
                     }
+        }
+        debug {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
 }
