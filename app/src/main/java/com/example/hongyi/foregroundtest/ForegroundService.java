@@ -69,9 +69,11 @@ import java.util.Date;
 import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.UUID;
@@ -80,6 +82,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class ForegroundService extends Service implements ServiceConnection{
+    private Set<String> sendJobSet;
     private Timer servicetimer;
     private Queue<String> resendDataQueue = new ConcurrentLinkedQueue<>();
     private Queue<String> resendBatteryQueue = new ConcurrentLinkedQueue<>();
@@ -91,12 +94,12 @@ public class ForegroundService extends Service implements ServiceConnection{
     private final static ArrayList<String> SENSOR_MAC = new ArrayList<>();
     private final ArrayList<Board> boards = new ArrayList<>();
     private BluetoothAdapter btAdapter;
-    private boolean isScanning= false;
     private HashSet<UUID> filterServiceUuids;
     private ArrayList<ScanFilter> api21ScanFilters;
     private final static UUID[] serviceUuids;
     private static ExecutorService dataPool;
     private boolean keepAlive = false;
+    private Timer restartTM;
 
     public static boolean IS_SERVICE_RUNNING = false;
 
@@ -108,16 +111,6 @@ public class ForegroundService extends Service implements ServiceConnection{
         dataPool = Executors.newCachedThreadPool();
     }
 
-
-//    private void initParams() {
-//        5 Sensors for demo
-//        SENSOR_MAC.add("D2:02:B3:1C:D2:C3"); //C Body
-//        SENSOR_MAC.add("EB:0B:E2:6E:8C:52"); //C Front door
-//        SENSOR_MAC.add("F7:FC:FF:D2:F1:66"); //C Bath door
-//        SENSOR_MAC.add("EE:9F:61:85:DA:6C"); //C Fridge
-//        SENSOR_MAC.add("E8:BD:10:7D:58:B4"); //C Custom
-//    }
-
     public static String getSensors(int i) {
         String MAC;
         try {
@@ -128,40 +121,10 @@ public class ForegroundService extends Service implements ServiceConnection{
 
         return MAC;
     }
+
     @Override
     public void onCreate() {
         super.onCreate();
-        servicetimer = new Timer();
-
-        // Change log files every hour
-        servicetimer.schedule(new TimerTask() {
-            @Override
-            public void run() {
-                Calendar day_time = new GregorianCalendar();
-                int year = day_time.get(GregorianCalendar.YEAR);
-                int month = day_time.get(GregorianCalendar.MONTH) + 1;
-                int day = day_time.get(GregorianCalendar.DAY_OF_MONTH);
-                int hour = day_time.get(GregorianCalendar.HOUR_OF_DAY);
-                int minute = day_time.get(GregorianCalendar.MINUTE);
-                int second = day_time.get(GregorianCalendar.SECOND);
-                String log_filename = year + "-" + month + "-" + day + "_" + hour + "_" + minute + "_" + second + ".log";
-                String address = (getApplicationContext().getExternalFilesDirs("")[0].getAbsolutePath() + "/logs").contains("external_SD") ? getApplicationContext().getExternalFilesDirs("")[1].getAbsolutePath() + "/logs" : getApplicationContext().getExternalFilesDirs("")[0].getAbsolutePath() + "/logs";
-                Log.i("paths", address);
-                File folder = new File(address);
-                if (!folder.exists()) {
-                    folder.mkdirs();
-                }
-                log_file = new File(folder, log_filename);
-                log_file.setReadable(true);
-                log_file.setWritable(true);
-            }
-        }, 0, 3600000);
-
-        getApplicationContext().bindService(new Intent(this, MetaWearBleService.class), this, Context.BIND_AUTO_CREATE);
-//        String phoneID = ((TelephonyManager) getSystemService(TELEPHONY_SERVICE)).getDeviceId();
-//        Log.i("phoneID", phoneID);
-//        initParams();
-        Log.i(LOG_TAG, "successfully on create");
     }
 
     private String getFormattedTime() {
@@ -197,6 +160,13 @@ public class ForegroundService extends Service implements ServiceConnection{
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        sendJobSet = new HashSet<>();
+        String address = (getApplicationContext().getExternalFilesDirs("")[0].getAbsolutePath()).contains("external_SD") ? getApplicationContext().getExternalFilesDirs("")[1].getAbsolutePath() : getApplicationContext().getExternalFilesDirs("")[0].getAbsolutePath();
+        File folder = new File(address);
+        if (!folder.exists()) {
+            folder.mkdirs();
+        }
+
         if (intent != null) {
             if (intent.getAction().equals(Constants.ACTION.STARTFOREGROUND_ACTION)) {
                 if (SENSOR_MAC.size() == 0) {
@@ -218,11 +188,6 @@ public class ForegroundService extends Service implements ServiceConnection{
                 stopSelf();
             }
         } else {
-            String address = (getApplicationContext().getExternalFilesDirs("")[0].getAbsolutePath()).contains("external_SD") ? getApplicationContext().getExternalFilesDirs("")[1].getAbsolutePath() : getApplicationContext().getExternalFilesDirs("")[0].getAbsolutePath();
-            File folder = new File(address);
-            if (!folder.exists()) {
-                folder.mkdirs();
-            }
             File config_file = new File(address, "config.ini");
             try {
                 BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(config_file)));
@@ -250,6 +215,58 @@ public class ForegroundService extends Service implements ServiceConnection{
                 e.printStackTrace();
             }
         }
+
+        servicetimer = new Timer();
+
+        // Change log files every hour
+        servicetimer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                Calendar day_time = new GregorianCalendar();
+                int year = day_time.get(GregorianCalendar.YEAR);
+                int month = day_time.get(GregorianCalendar.MONTH) + 1;
+                int day = day_time.get(GregorianCalendar.DAY_OF_MONTH);
+                int hour = day_time.get(GregorianCalendar.HOUR_OF_DAY);
+                int minute = day_time.get(GregorianCalendar.MINUTE);
+                int second = day_time.get(GregorianCalendar.SECOND);
+                String log_filename = year + "-" + month + "-" + day + "_" + hour + "_" + minute + "_" + second + ".log";
+                String address = (getApplicationContext().getExternalFilesDirs("")[0].getAbsolutePath() + "/logs").contains("external_SD") ? getApplicationContext().getExternalFilesDirs("")[1].getAbsolutePath() + "/logs" : getApplicationContext().getExternalFilesDirs("")[0].getAbsolutePath() + "/logs";
+                Log.i("paths", address);
+                File folder = new File(address);
+                if (!folder.exists()) {
+                    folder.mkdirs();
+                }
+                log_file = new File(folder, log_filename);
+                log_file.setReadable(true);
+                log_file.setWritable(true);
+            }
+        }, 0, 3600000);
+
+        getApplicationContext().bindService(new Intent(this, MetaWearBleService.class), this, Context.BIND_AUTO_CREATE);
+
+        File saved_task = new File(address, "saved_task.log");
+        try {
+            BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(saved_task)));
+            String line;
+            while ((line = br.readLine()) !=null) {
+                if (line.contains("\"c\"")){
+                    resendTempQueue.add(line);
+                } else if (line.contains("\"b\"")) {
+                    resendBatteryQueue.add(line);
+                } else {
+                    resendDataQueue.add(line);
+                }
+            }
+            br.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        saved_task.delete();
+//        String phoneID = ((TelephonyManager) getSystemService(TELEPHONY_SERVICE)).getDeviceId();
+//        Log.i("phoneID", phoneID);
+//        initParams();
+        Log.i(LOG_TAG, "successfully on create");
+
         return START_STICKY;
     }
 
@@ -329,8 +346,9 @@ public class ForegroundService extends Service implements ServiceConnection{
     private ScanCallback api21ScallCallback= null;
 
     @TargetApi(22)
-    public void startBleScan() {
-        isScanning= true;
+    public Set<String> scanBle(long interval) {
+        final Set<String> nearByDevices = new HashSet<>();
+        long scanTS = System.currentTimeMillis();
 
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
             filterServiceUuids = new HashSet<>();
@@ -351,7 +369,7 @@ public class ForegroundService extends Service implements ServiceConnection{
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
             deprecatedScanCallback= new BluetoothAdapter.LeScanCallback() {
                 private void foundDevice(final BluetoothDevice btDevice, final int rssi) {
-
+                    nearByDevices.add(btDevice.getAddress());
                 }
                 @Override
                 public void onLeScan(BluetoothDevice bluetoothDevice, int rssi, byte[] scanRecord) {
@@ -413,18 +431,28 @@ public class ForegroundService extends Service implements ServiceConnection{
             };
             btAdapter.getBluetoothLeScanner().startScan(api21ScanFilters, new ScanSettings.Builder().build(), api21ScallCallback);
         }
+
+        while ((System.currentTimeMillis()-scanTS) <= interval) {
+
+        }
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
+            btAdapter.stopLeScan(deprecatedScanCallback);
+        } else {
+            btAdapter.getBluetoothLeScanner().stopScan(api21ScallCallback);
+        }
+
+        return nearByDevices;
     }
 
-    public void stopBleScan() {
-        if (isScanning) {
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
-                btAdapter.stopLeScan(deprecatedScanCallback);
-            } else {
-                btAdapter.getBluetoothLeScanner().stopScan(api21ScallCallback);
-            }
-            isScanning= false;
-        }
-    }
+
+//    public void startBleScan() {
+//
+//    }
+//
+//    public void stopBleScan() {
+//
+//    }
 
 
     @Override
@@ -455,7 +483,7 @@ public class ForegroundService extends Service implements ServiceConnection{
 
         btAdapter = ((BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE)).getAdapter();
 
-        BluetoothAdapter btAdapter = ((BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE)).getAdapter();
+//        BluetoothAdapter btAdapter = ((BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE)).getAdapter();
         if (!btAdapter.isEnabled()) {
             btAdapter.enable();
         }
@@ -468,15 +496,7 @@ public class ForegroundService extends Service implements ServiceConnection{
             }
         }
 
-        startBleScan();
-
-        try {
-            Thread.sleep(15000);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-
-        stopBleScan();
+        Set<String> nearMW = scanBle(15000);
 
         // Add body sensor
         BluetoothDevice btDevice = btAdapter.getRemoteDevice(SENSOR_MAC.get(0));
@@ -550,6 +570,50 @@ public class ForegroundService extends Service implements ServiceConnection{
             }
         }, 180000);
 
+        restartTM = new Timer();
+
+        //Schedule Scan for Restart
+        TimerTask scanForRestart = new TimerTask() {
+            @Override
+            public void run() {
+                btAdapter = ((BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE)).getAdapter();
+                if (!btAdapter.isEnabled()) {
+                    btAdapter.enable();
+                }
+                Set<String> nearMW = scanBle(10000);
+
+                if (nearMW.isEmpty() && btAdapter.isEnabled()) {
+                    // Save unsent tasks
+                    String address = (getApplicationContext().getExternalFilesDirs("")[0].getAbsolutePath()).contains("external_SD") ? getApplicationContext().getExternalFilesDirs("")[1].getAbsolutePath() : getApplicationContext().getExternalFilesDirs("")[0].getAbsolutePath();
+                    File folder = new File(address);
+                    if (!folder.exists()) {
+                        folder.mkdirs();
+                    }
+                    File save_task = new File(address, "saved_task.log");
+                    try {
+                        BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(save_task)));
+                        for (String s : sendJobSet) {
+                            bw.write(s);
+                            bw.newLine();
+                            bw.flush();
+                        }
+                        bw.close();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                    try {
+                        Process proc = Runtime.getRuntime()
+                                .exec(new String[]{ "su", "-c", "reboot" });
+                        proc.waitFor();
+                    } catch (Exception ex) {
+                        ex.printStackTrace();
+                    }
+                }
+            }
+        };
+
+        restartTM.schedule(scanForRestart, 600000, 240000);
+
     }
 
     @Override
@@ -603,27 +667,6 @@ public class ForegroundService extends Service implements ServiceConnection{
         return dataLists;
     }
 
-    public String getJSON (String name, ArrayList<String> data) {
-        JSONObject jsonstring = new JSONObject();
-        JSONArray logs = new JSONArray();
-        try {
-            jsonstring.put("s", name);
-            for (String s : data) {
-                JSONObject temp = new JSONObject();
-                temp.put("t", Double.valueOf(s.split(",")[0]));
-                temp.put("x", Integer.valueOf(s.split(",")[1]));
-                temp.put("y", Integer.valueOf(s.split(",")[2]));
-                temp.put("z", Integer.valueOf(s.split(",")[3]));
-                logs.put(temp);
-            }
-            jsonstring.put("logs", logs);
-        } catch (JSONException e) {
-            e.printStackTrace();
-        }
-
-        return jsonstring.toString();
-    }
-
     public String getJSON (String name, String ts, String temperature) {
         JSONObject jsonstring = new JSONObject();
         try {
@@ -658,6 +701,7 @@ public class ForegroundService extends Service implements ServiceConnection{
             ConnectivityManager connMgr = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
             NetworkInfo netInfo = connMgr.getActiveNetworkInfo();
             HttpURLConnection conn = null;
+            sendJobSet.add(params[0]);
             if (netInfo != null && netInfo.isConnected()) {
                 try {
                     URL url = new URL(urlbase);
@@ -693,6 +737,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                         while(line!=null){
                             Log.i("Http_response", line);
                             writeSensorLog("HTTP Response: " + line.trim(), _success, "Data");
+                            sendJobSet.remove(params[0]);
                             line = br.readLine();
                         }
                     } else {
@@ -727,6 +772,7 @@ public class ForegroundService extends Service implements ServiceConnection{
         protected String doInBackground(String... params) {
             ConnectivityManager connMgr = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
             NetworkInfo netInfo = connMgr.getActiveNetworkInfo();
+            sendJobSet.add(params[0]);
             if (netInfo != null && netInfo.isConnected()) {
                 try {
                     URL url = new URL(urlbase);
@@ -764,6 +810,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                                 writeSensorLog("HTTP Response: " + line.trim(), _success, "Data");
                                 line = br.readLine();
                             }
+                            sendJobSet.remove(params[0]);
                         } else {
                             Log.e(LOG_ERR, "Post error code: " + response + " " + params[0]);
                             resendTempQueue.offer(params[0]);
@@ -794,6 +841,7 @@ public class ForegroundService extends Service implements ServiceConnection{
         protected String doInBackground(String... params) {
             ConnectivityManager connMgr = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
             NetworkInfo netInfo = connMgr.getActiveNetworkInfo();
+            sendJobSet.add(params[0]);
             if (netInfo != null && netInfo.isConnected()) {
                 try {
                     URL url = new URL(urlbase);
@@ -831,6 +879,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                                 writeSensorLog("HTTP Response: " + line.trim(), _success, "Data");
                                 line = br.readLine();
                             }
+                            sendJobSet.remove(params[0]);
                         } else {
                             Log.e(LOG_ERR, "Post error code: " + response + " " + params[0]);
                             resendBatteryQueue.offer(params[0]);
@@ -1303,13 +1352,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                         TimerTask reconnect = new TimerTask() {
                             @Override
                             synchronized public void run() {
-                                startBleScan();
-                                try {
-                                    Thread.sleep(5000);
-                                } catch (InterruptedException e) {
-                                    e.printStackTrace();
-                                }
-                                stopBleScan();
+                                Set<String> nearMW = scanBle(5000);
                                 connectionAttemptTS = System.currentTimeMillis();
                                 writeSensorLog("Try to connect", _info, devicename);
                                 board.connect();
@@ -1331,14 +1374,6 @@ public class ForegroundService extends Service implements ServiceConnection{
                         TimerTask reconnect = new TimerTask() {
                             @Override
                             synchronized public void run() {
-//                                startBleScan();
-//                                try {
-//                                    Thread.sleep(5000);
-//                                } catch (InterruptedException e) {
-//                                    e.printStackTrace();
-//                                }
-//                                stopBleScan();
-//                                connectionAttemptTS = System.currentTimeMillis();
                                 writeSensorLog("Try to connect", _info, devicename);
                                 board.connect();
                             }
@@ -1346,19 +1381,13 @@ public class ForegroundService extends Service implements ServiceConnection{
                         TimerTask reconnect_long = new TimerTask() {
                             @Override
                             synchronized public void run() {
-                                startBleScan();
-                                try {
-                                    Thread.sleep(5000);
-                                } catch (InterruptedException e) {
-                                    e.printStackTrace();
-                                }
-                                stopBleScan();
+                                Set<String> nearMW = scanBle(5000);
                                 connectionAttemptTS = System.currentTimeMillis();
                                 writeSensorLog("Try to connect", _info, devicename);
                                 board.connect();
                             }
                         };
-                        if (connectionFailureCount < 2) {
+                        if (connectionFailureCount < 3) {
                             timer.schedule(reconnect, 0);
                             writeSensorLog("Reconnect attempt " + connectionFailureCount, _info, devicename);
                         } else {
@@ -1374,13 +1403,6 @@ public class ForegroundService extends Service implements ServiceConnection{
                         TimerTask reconnect = new TimerTask() {
                             @Override
                             synchronized public void run() {
-                                startBleScan();
-                                try {
-                                    Thread.sleep(5000);
-                                } catch (InterruptedException e) {
-                                    e.printStackTrace();
-                                }
-                                stopBleScan();
                                 connectionAttemptTS = System.currentTimeMillis();
                                 writeSensorLog("Try to connect", _info, devicename);
                                 board.connect();
@@ -1566,7 +1588,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                         startTimestamp[0] = System.currentTimeMillis();
                         dataCount = 0;
                         ArrayList<String> filteredCache = filtering(previousCache, temp, 32, 3);
-                        previousCache = new ArrayList<String>(temp);
+                        previousCache = new ArrayList<>(temp);
                         if (filteredCache.size() != 0) {
                             ArrayList<String> data_array = getJSONList(devicename, filteredCache);
                             for (String s : data_array) {

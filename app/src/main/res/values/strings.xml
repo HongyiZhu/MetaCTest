@@ -3,6 +3,7 @@
 
     <string name="hello_world">Hello world!</string>
     <string name="action_settings">Settings</string>
+    <string name="reboot">Reboot</string>
     <string name="degree">°C</string>
     <string name="sensor1">Sensor 1:</string>
     <string name="sensor2">Sensor 2:</string>

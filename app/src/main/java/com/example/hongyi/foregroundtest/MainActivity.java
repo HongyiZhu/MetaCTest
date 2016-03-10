@@ -260,6 +260,16 @@ public class MainActivity extends AppCompatActivity{
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         int id = item.getItemId();
+        if (id == R.id.reboot) {
+            try {
+                Process proc = Runtime.getRuntime()
+                        .exec(new String[]{ "su", "-c", "reboot" });
+                proc.waitFor();
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+        }
+
         return id == R.id.action_settings || super.onOptionsItemSelected(item);
     }
 
