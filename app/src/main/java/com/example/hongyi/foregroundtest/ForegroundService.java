@@ -100,6 +100,7 @@ public class ForegroundService extends Service implements ServiceConnection{
     private static ExecutorService dataPool;
     private boolean keepAlive = false;
     private Timer restartTM;
+    private Set<String> nearByDevices;
 
     public static boolean IS_SERVICE_RUNNING = false;
 
@@ -245,23 +246,25 @@ public class ForegroundService extends Service implements ServiceConnection{
         getApplicationContext().bindService(new Intent(this, MetaWearBleService.class), this, Context.BIND_AUTO_CREATE);
 
         File saved_task = new File(address, "saved_task.log");
-        try {
-            BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(saved_task)));
-            String line;
-            while ((line = br.readLine()) !=null) {
-                if (line.contains("\"c\"")){
-                    resendTempQueue.add(line);
-                } else if (line.contains("\"b\"")) {
-                    resendBatteryQueue.add(line);
-                } else {
-                    resendDataQueue.add(line);
+        if (saved_task.exists()) {
+            try {
+                BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(saved_task)));
+                String line;
+                while ((line = br.readLine()) != null) {
+                    if (line.contains("\"c\"")) {
+                        resendTempQueue.add(line);
+                    } else if (line.contains("\"b\"")) {
+                        resendBatteryQueue.add(line);
+                    } else {
+                        resendDataQueue.add(line);
+                    }
                 }
+                br.close();
+            } catch (IOException e) {
+                e.printStackTrace();
             }
-            br.close();
-        } catch (IOException e) {
-            e.printStackTrace();
+            saved_task.delete();
         }
-        saved_task.delete();
 //        String phoneID = ((TelephonyManager) getSystemService(TELEPHONY_SERVICE)).getDeviceId();
 //        Log.i("phoneID", phoneID);
 //        initParams();
@@ -309,26 +312,7 @@ public class ForegroundService extends Service implements ServiceConnection{
         boards.get(0).board.disconnect();
         Log.i(LOG_TAG, "Body sensor destroyed");
         writeSensorLog("Body sensor destroyed", _info);
-//        for (int i = 1; i < SENSOR_MAC.size(); i++) {
-//            startBleScan();
-//            try {
-//                Thread.sleep(3000);
-//            } catch (InterruptedException e) {
-//                e.printStackTrace();
-//            }
-//            stopBleScan();
-//
-//            ObjectBoard mwBoard = (ObjectBoard) boards.get(i);
-//            mwBoard.first = -1;
-//            mwBoard.board.connect();
-//            while (!mwBoard.destroyed) {
-//                try {
-//                    Thread.sleep(10000);
-//                } catch (InterruptedException e) {
-//                    e.printStackTrace();
-//                }
-//            }
-//        }
+
         super.onDestroy();
         getApplicationContext().unbindService(this);
         Log.i(LOG_TAG, "All destruction finished");
@@ -347,7 +331,7 @@ public class ForegroundService extends Service implements ServiceConnection{
 
     @TargetApi(22)
     public Set<String> scanBle(long interval) {
-        final Set<String> nearByDevices = new HashSet<>();
+        nearByDevices = new HashSet<>();
         long scanTS = System.currentTimeMillis();
 
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
@@ -445,15 +429,14 @@ public class ForegroundService extends Service implements ServiceConnection{
         return nearByDevices;
     }
 
+    private boolean need_reboot() {
+        boolean flag = false;
+        for (int i = 1; i < SENSOR_MAC.size();i++){
+            flag = boards.get(i).needs_to_reboot || flag;
+        }
 
-//    public void startBleScan() {
-//
-//    }
-//
-//    public void stopBleScan() {
-//
-//    }
-
+        return flag;
+    }
 
     @Override
     public void onServiceConnected(ComponentName name, IBinder service) {
@@ -496,7 +479,8 @@ public class ForegroundService extends Service implements ServiceConnection{
             }
         }
 
-        Set<String> nearMW = scanBle(15000);
+        Set<String> nearMW = scanBle(5000);
+        Log.i("BLE", String.valueOf(nearMW.size()));
 
         // Add body sensor
         BluetoothDevice btDevice = btAdapter.getRemoteDevice(SENSOR_MAC.get(0));
@@ -580,9 +564,11 @@ public class ForegroundService extends Service implements ServiceConnection{
                 if (!btAdapter.isEnabled()) {
                     btAdapter.enable();
                 }
-                Set<String> nearMW = scanBle(10000);
 
-                if (nearMW.isEmpty() && btAdapter.isEnabled()) {
+                Set<String> nearMW = scanBle(5000);
+                Log.i("BLE", String.valueOf(nearMW.size()));
+
+                if ((nearMW.isEmpty() && btAdapter.isEnabled()) || (need_reboot())) {
                     // Save unsent tasks
                     String address = (getApplicationContext().getExternalFilesDirs("")[0].getAbsolutePath()).contains("external_SD") ? getApplicationContext().getExternalFilesDirs("")[1].getAbsolutePath() : getApplicationContext().getExternalFilesDirs("")[0].getAbsolutePath();
                     File folder = new File(address);
@@ -591,6 +577,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                     }
                     File save_task = new File(address, "saved_task.log");
                     try {
+                        save_task.createNewFile();
                         BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(save_task)));
                         for (String s : sendJobSet) {
                             bw.write(s);
@@ -912,6 +899,7 @@ public class ForegroundService extends Service implements ServiceConnection{
         public String MAC_ADDRESS;
         public String temperature = "-99999";
         public String battery;
+        public boolean needs_to_reboot;
         public final String CONNECTED = "Connected.\nStreaming Data",
                 DISCONNECTED_BODY = "Lost connection.\nReconnecting",
                 DISCONNECTED_OBJ = "Download finished.",
@@ -1088,10 +1076,12 @@ public class ForegroundService extends Service implements ServiceConnection{
             this.SENSOR_DATA_LOG = "Data:Sensor:" + MAC_ADDRESS;
             this.timer = new java.util.Timer();
             this.datalist = new ArrayList<>();
+            this.needs_to_reboot = false;
 
             this.board.setConnectionStateHandler(new MetaWearBoard.ConnectionStateHandler() {
                 @Override
                 public void connected() {
+                    needs_to_reboot = false;
                     connectionFailureCount = 0;
                     if (first == 0) {
                         first = 1;
@@ -1348,11 +1338,11 @@ public class ForegroundService extends Service implements ServiceConnection{
                 @Override
                 public void disconnected() {
                     if (first != -1) {
-                        long interval = 235000 - (System.currentTimeMillis() - connectionAttemptTS) % 240000;
+                        long interval = 240000 - (System.currentTimeMillis() - connectionAttemptTS) % 240000;
                         TimerTask reconnect = new TimerTask() {
                             @Override
                             synchronized public void run() {
-                                Set<String> nearMW = scanBle(5000);
+//                                Set<String> nearMW = scanBle(5000);
                                 connectionAttemptTS = System.currentTimeMillis();
                                 writeSensorLog("Try to connect", _info, devicename);
                                 board.connect();
@@ -1370,6 +1360,9 @@ public class ForegroundService extends Service implements ServiceConnection{
                         writeSensorLog(error.getMessage(), _error, devicename);
                         sensor_status = FAILURE;
                         broadcastStatus();
+                        if (error.getMessage().contains("status: 257") || error.getMessage().contains("Error connecting to gatt server")) {
+                            needs_to_reboot = true;
+                        }
                         connectionFailureCount += 1;
                         TimerTask reconnect = new TimerTask() {
                             @Override
@@ -1381,18 +1374,18 @@ public class ForegroundService extends Service implements ServiceConnection{
                         TimerTask reconnect_long = new TimerTask() {
                             @Override
                             synchronized public void run() {
-                                Set<String> nearMW = scanBle(5000);
+//                                Set<String> nearMW = scanBle(5000);
                                 connectionAttemptTS = System.currentTimeMillis();
                                 writeSensorLog("Try to connect", _info, devicename);
                                 board.connect();
                             }
                         };
-                        if (connectionFailureCount < 3) {
+                        if (connectionFailureCount < 2) {
                             timer.schedule(reconnect, 0);
                             writeSensorLog("Reconnect attempt " + connectionFailureCount, _info, devicename);
                         } else {
                             connectionFailureCount = 0;
-                            long interval = 235000 - (System.currentTimeMillis() - connectionAttemptTS) % 240000;
+                            long interval = 240000 - (System.currentTimeMillis() - connectionAttemptTS) % 240000;
                             timer.schedule(reconnect_long, interval);
                             writeSensorLog("Skip this round, schedule to reconnect in " + interval + " ms", _info, devicename);
                         }
@@ -1426,6 +1419,7 @@ public class ForegroundService extends Service implements ServiceConnection{
         private int sampleInterval;
         private final String devicename;
         private long temperature_timestamp;
+        private long battery_timestamp;
 
         public BodyBoard(MetaWearBoard mxBoard, final String MAC, float freq) {
             this.board = mxBoard;
@@ -1440,6 +1434,7 @@ public class ForegroundService extends Service implements ServiceConnection{
             this.devicename = MAC_ADDRESS.replace(":", "");
             this.sensor_status = CONNECTING;
             this.temperature_timestamp = 0;
+            this.battery_timestamp = 0;
             final String SENSOR_DATA_LOG = "Data:Sensor:" + MAC_ADDRESS;
 
             this.board.setConnectionStateHandler(new MetaWearBoard.ConnectionStateHandler() {
@@ -1528,18 +1523,6 @@ public class ForegroundService extends Service implements ServiceConnection{
                                                     temperature = String.format("%.3f", message.getData(Float.class));
                                                     Log.i(devicename, jsonstr);
                                                     // get body sensor battery info
-                                                    board.readBatteryLevel().onComplete(new AsyncOperation.CompletionHandler<Byte>() {
-                                                        @Override
-                                                        public void success(Byte result) {
-                                                            // Send Battery Info
-                                                            battery = result.toString();
-                                                            Log.i("battery_Body", result.toString());
-                                                            String jsonstr = getJSON(devicename,String.format("%.3f", System.currentTimeMillis()/1000.0), Integer.valueOf(result.toString()));
-                                                            postBatteryAsync task = new postBatteryAsync();
-                                                            task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, jsonstr);
-//                                                            task.execute(jsonstr);
-                                                        }
-                                                    });
                                                     broadcastStatus();
                                                 }
                                             }
@@ -1551,24 +1534,29 @@ public class ForegroundService extends Service implements ServiceConnection{
                                             public void run() {
                                                 mcTempModule.readTemperature(tempSources.get(MultiChannelTemperature.MetaWearProChannel.ON_BOARD_THERMISTOR));
                                             }
-                                        },0,240000);
-//                                        try {
-//                                            AsyncOperation<Timer.Controller> taskResult= board.getModule(Timer.class)
-//                                                    .scheduleTask(new Timer.Task() {
-//                                                        @Override
-//                                                        public void commands() {
-//                                                            finalMcTempModule.readTemperature(tempSources.get(MultiChannelTemperature.MetaWearProChannel.ON_BOARD_THERMISTOR));
-//                                                        }
-//                                                    }, 240000, false);
-//                                            taskResult.onComplete(new AsyncOperation.CompletionHandler<Timer.Controller>() {
-//                                                @Override
-//                                                public void success(Timer.Controller result) {
-//                                                    result.start();
-//                                                }
-//                                            });
-//                                        } catch (UnsupportedModuleException e) {
-//                                            e.printStackTrace();
-//                                        }
+                                        }, 0, 240000);
+
+                                        timer.schedule(new TimerTask() {
+                                            @Override
+                                            public void run() {
+                                                board.readBatteryLevel().onComplete(new AsyncOperation.CompletionHandler<Byte>() {
+                                                    @Override
+                                                    public void success(Byte result) {
+                                                        // Send Battery Info
+                                                        long timestamp = System.currentTimeMillis();
+                                                        if (timestamp - battery_timestamp >= 220000) {
+                                                            battery_timestamp = timestamp;
+                                                            battery = result.toString();
+                                                            Log.i("battery_Body", result.toString());
+                                                            String jsonstr = getJSON(devicename, String.format("%.3f", System.currentTimeMillis() / 1000.0), Integer.valueOf(result.toString()));
+                                                            postBatteryAsync task = new postBatteryAsync();
+                                                            task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, jsonstr);
+//                                                            task.execute(jsonstr);
+                                                        }
+                                                    }
+                                                });
+                                            }
+                                        }, 120000,240000);
                                     }
                                 });
                     } catch (UnsupportedModuleException e) {
@@ -1594,11 +1582,6 @@ public class ForegroundService extends Service implements ServiceConnection{
                             for (String s : data_array) {
                                 resendDataQueue.offer(s);
                             }
-//                            String jsonstr = getJSON(devicename, filteredCache);
-//                            postDataAsync task = new postDataAsync();
-//                            task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, jsonstr);
-//                            task.execute(jsonstr);
-//                            Log.i(devicename, jsonstr);
                         }
                     }
                     if (!ActiveDisconnect) {
