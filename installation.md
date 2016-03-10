@@ -1,6 +1,7 @@
 # Installation Guide
-[TOC]
+
 ## Preparing the set
+
 ### Root the gateway
 1. Downlaod [TowelRoot](bit.ly/1RRWWAk).
 2. Install the application and ignore the warning. Finish the installation and open the application.
