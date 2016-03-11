@@ -971,15 +971,6 @@ public class ForegroundService extends Service implements ServiceConnection{
             Log.i("Intent", intent.getStringExtra("name"));
             sendBroadcast(intent);
         }
-
-//        public void broadcastTemperature(String temp, long time) {
-//            Intent intent = new Intent(BROADCAST_TAG);
-//            intent.putExtra("name", this.MAC_ADDRESS);
-//            intent.putExtra("status", this.sensor_status);
-//            intent.putExtra("timestamp", time);
-//            intent.putExtra("temperature", temp);
-//            sendBroadcast(intent);
-//        }
     }
 
     public class ObjectBoard extends Board{
@@ -998,6 +989,8 @@ public class ForegroundService extends Service implements ServiceConnection{
         private int total = 0;
         private long lastDownloadTS;
         private long dl_TS;
+        private int period_expected;
+        private double avg_samp_per_min;
 
 
         private final RouteManager.MessageHandler loggingMessageHandler = new RouteManager.MessageHandler() {
@@ -1074,6 +1067,35 @@ public class ForegroundService extends Service implements ServiceConnection{
             } catch (UnsupportedModuleException e) {
                 e.printStackTrace();
             }
+        }
+
+        private ArrayList<Object> trim_final_dataset (ArrayList<CartesianFloat> datalist, int expected_download_size, int period_expected) {
+            ArrayList<Object> rt_set = new ArrayList<>();
+            if (period_expected >= expected_download_size) {
+                rt_set.add(expected_download_size);
+                rt_set.add(datalist);
+            } else {
+                int trim_num = expected_download_size - period_expected;
+                if (trim_num <= 20) {
+                    rt_set.add(expected_download_size);
+                    rt_set.add(datalist);
+                } else {
+                    ArrayList<CartesianFloat> templist = new ArrayList<>(datalist);
+                    for (int i = 0; i < trim_num; i++){
+                        if (templist.size() != 0) {
+                            templist.remove(0);
+                        }
+                    }
+                    if (templist.size() == 0) {
+                        rt_set.add(0);
+                    } else {
+                        rt_set.add(period_expected);
+                    }
+                    rt_set.add(templist);
+                }
+            }
+
+            return rt_set;
         }
 
         public ObjectBoard(MetaWearBoard mxBoard, final String MAC, float freq) {
@@ -1192,6 +1214,8 @@ public class ForegroundService extends Service implements ServiceConnection{
                             sensor_status = CONNECTED;
                             final Logging logger = board.getModule(Logging.class);
                             dl_TS = System.currentTimeMillis();
+                            long period = dl_TS - lastDownloadTS;
+                            period_expected = (int) (avg_samp_per_min * (period / 60000.0));
 
                             // retrieve temperature and battery info
                             if (System.currentTimeMillis() - infoTS >= 210000) {
@@ -1264,12 +1288,13 @@ public class ForegroundService extends Service implements ServiceConnection{
                                 @Override
                                 public void onProgressUpdate(int nEntriesLeft, int totalEntries) {
                                     Log.i("data", String.format("Progress: %d/%d/%d", datalist.size(), totalEntries - nEntriesLeft, totalEntries));
-//                                    expected_useful_download = (int) (totalEntries * datalist.size() / ((totalEntries - nEntriesLeft) * 1.0));
+                                    int expected_N = (int) (totalEntries * datalist.size() / ((totalEntries - nEntriesLeft) * 1.0));
                                     writeSensorLog(String.format("Download Progress: %d/%d", totalEntries - nEntriesLeft, totalEntries), _info, devicename);
                                     total = totalEntries;
                                     if (nEntriesLeft == 0) {
                                         Log.i("data", "Download Completed");
                                         lastDownloadTS = dl_TS;
+                                        expected_N = datalist.size();
                                         writeSensorLog("Download Completed", _success, devicename);
                                         Log.i("data", "Generated " + datalist.size() + " data points");
                                         writeSensorLog("Generated " + datalist.size() + " data points", _success, devicename);
