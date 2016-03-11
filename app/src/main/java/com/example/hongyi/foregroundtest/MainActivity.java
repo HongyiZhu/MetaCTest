@@ -118,6 +118,7 @@ public class MainActivity extends AppCompatActivity{
                 }
                 netInfo = connMgr.getActiveNetworkInfo();
             }
+
             final Handler mHandler = new Handler() {
                 @Override
                 public void handleMessage(android.os.Message msg) {
@@ -131,7 +132,10 @@ public class MainActivity extends AppCompatActivity{
                     Intent service = new Intent(MainActivity.this, ForegroundService.class);
                     service.setAction(Constants.ACTION.STARTFOREGROUND_ACTION);
                     try {
-                        JSONArray jsonarr = new JSONArray(res);
+                        JSONObject js = new JSONObject(res);
+                        String send_url = js.getString("send_url");
+                        service.putExtra("send_url", send_url);
+                        JSONArray jsonarr = js.getJSONArray("sensors");
                         for (int i = 0;i<jsonarr.length();i++) {
                             JSONObject jsobj = jsonarr.getJSONObject(i);
                             String id = ((String) jsobj.get("sensor_id")).replaceAll("..(?!$)", "$0:");
@@ -146,6 +150,13 @@ public class MainActivity extends AppCompatActivity{
                     IS_SERVICE_RUNNING = true;
                     startService(service);
                     File config_file = new File(folder, "config.ini");
+                    if (!config_file.exists()) {
+                        try {
+                            config_file.createNewFile();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    }
                     config_file.setReadable(true);
                     config_file.setWritable(true);
                     try {
@@ -174,11 +185,29 @@ public class MainActivity extends AppCompatActivity{
                     URL url;
                     HttpURLConnection connection = null;
                     try {
-                        url = new URL("https://app.silverlink247.com/api/v1/gateways/"+phoneID+"/sensors?access_token=a3nV4VJMYV8fsoyZTSXV");
+                        url = new URL("https://app.silverlink247.com/startup");
                         connection = (HttpURLConnection) url.openConnection();
-                        connection.setRequestMethod("GET");
+                        connection.setRequestMethod("POST");
+                        connection.setRequestProperty("Accept", "application/json");
+                        connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+                        connection.setDoOutput(true);
+                        connection.setDoInput(true);
+                        connection.setUseCaches(false);
+                        connection.setInstanceFollowRedirects(true);
+                        connection.setRequestProperty("connection", "close");
+
                         try {
-                            connection.connect();
+                            OutputStream os = connection.getOutputStream();
+                            BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(os, "UTF-8"));
+                            String s = "{\"gateway\":\"" + phoneID + "\"}";
+                            writer.write(s);
+                            writer.flush();
+                            writer.close();
+                            os.flush();
+                            os.close();
+
+                            int response = connection.getResponseCode();
+                            Log.i("HTTP", String.valueOf(response));
 
                             InputStream in = new BufferedInputStream(connection.getInputStream());
                             StringBuilder sb = new StringBuilder();

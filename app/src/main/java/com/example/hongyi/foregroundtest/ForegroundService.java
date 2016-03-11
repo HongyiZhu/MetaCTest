@@ -101,6 +101,7 @@ public class ForegroundService extends Service implements ServiceConnection{
     private boolean keepAlive = false;
     private Timer restartTM;
     private Set<String> nearByDevices;
+    private String send_url_base;
 
     public static boolean IS_SERVICE_RUNNING = false;
 
@@ -177,6 +178,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                     SENSOR_MAC.add(intent.getStringExtra("D"));
                     SENSOR_MAC.add(intent.getStringExtra("E"));
                 }
+                send_url_base = intent.getStringExtra("send_url");
                 Log.i(LOG_TAG, "Received Start Foreground Intent");
 //            writeSensorLog("Received Start Foreground Intent", _info);
                 showNotification();
@@ -193,7 +195,9 @@ public class ForegroundService extends Service implements ServiceConnection{
             try {
                 BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(config_file)));
                 String res = br.readLine();
-                JSONArray jsonarr = new JSONArray(res);
+                JSONObject js = new JSONObject(res);
+                send_url_base = js.getString("send_url");
+                JSONArray jsonarr = js.getJSONArray("sensors");
                 Map<String, String> hm = new HashMap<>();
                 for (int i = 0;i<jsonarr.length();i++) {
                     JSONObject jsobj = jsonarr.getJSONObject(i);
@@ -682,7 +686,7 @@ public class ForegroundService extends Service implements ServiceConnection{
 
 
     public class postDataAsync extends AsyncTask<String, Boolean, String> {
-        String urlbase = "http://io.silverlink247.com/logs";
+        String urlbase = send_url_base + "/logs";
         @Override
         protected String doInBackground(String... params) {
             ConnectivityManager connMgr = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
@@ -754,7 +758,7 @@ public class ForegroundService extends Service implements ServiceConnection{
     }
 
     public class postTempAsync extends AsyncTask<String, Boolean, String> {
-        String urlbase = "http://io.silverlink247.com/temperature";
+        String urlbase = send_url_base + "/temperature";
         @Override
         protected String doInBackground(String... params) {
             ConnectivityManager connMgr = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
@@ -823,7 +827,7 @@ public class ForegroundService extends Service implements ServiceConnection{
     }
 
     public class postBatteryAsync extends AsyncTask<String, Boolean, String> {
-        String urlbase = "http://io.silverlink247.com/battery";
+        String urlbase = send_url_base + "/battery";
         @Override
         protected String doInBackground(String... params) {
             ConnectivityManager connMgr = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
