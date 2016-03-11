@@ -992,10 +992,13 @@ public class ForegroundService extends Service implements ServiceConnection{
         boolean configured = false;
         private long connectionAttemptTS;
         private int connectionFailureCount;
-        java.util.Timer timer;
+        private java.util.Timer timer;
         private long infoTS = 0;
-        boolean destroyed = false;
-        int total = 0;
+        private boolean destroyed = false;
+        private int total = 0;
+        private long lastDownloadTS;
+        private long dl_TS;
+
 
         private final RouteManager.MessageHandler loggingMessageHandler = new RouteManager.MessageHandler() {
             @Override
@@ -1118,6 +1121,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                             accel_module.routeData().fromAxes().log(SENSOR_DATA_LOG).commit().onComplete(accelHandler);
                             accel_module.enableAxisSampling();
                             accel_module.startLowPower();
+                            lastDownloadTS = System.currentTimeMillis();
                             // Get Temperature and Battery
                             MultiChannelTemperature mcTempModule;
                             try {
@@ -1185,12 +1189,9 @@ public class ForegroundService extends Service implements ServiceConnection{
                         writeSensorLog("Board configured", _info, devicename);
                     } else if (first == 2) {
                         try {
-//                            board.deserializeState(state);
                             sensor_status = CONNECTED;
                             final Logging logger = board.getModule(Logging.class);
-//                            RouteManager route = board.getRouteManager(routeID);
-//                            route.setLogMessageHandler(SENSOR_DATA_LOG, loggingMessageHandler);
-                            final long dl_TS = System.currentTimeMillis();
+                            dl_TS = System.currentTimeMillis();
 
                             // retrieve temperature and battery info
                             if (System.currentTimeMillis() - infoTS >= 210000) {
@@ -1229,11 +1230,6 @@ public class ForegroundService extends Service implements ServiceConnection{
                                                 for (String s : data_array) {
                                                     resendDataQueue.offer(s);
                                                 }
-//                                            String json = getJSON(devicename, data);
-//                                            Log.i(devicename, json);
-//                                            postDataAsync task = new postDataAsync();
-//                                            task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, json);
-//                                            task.execute(json);
                                             }
                                             datalist.clear();
                                             total = 0;
@@ -1256,6 +1252,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                                             board.removeRoutes();
                                             board.disconnect();
                                             sensor_status = INITIATED;
+                                            lastDownloadTS = dl_TS;
                                             broadcastStatus();
                                         }
                                     }
@@ -1266,11 +1263,13 @@ public class ForegroundService extends Service implements ServiceConnection{
                             logger.downloadLog(0.1f, new Logging.DownloadHandler() {
                                 @Override
                                 public void onProgressUpdate(int nEntriesLeft, int totalEntries) {
-                                    Log.i("data", String.format("Progress: %d/%d", totalEntries - nEntriesLeft, totalEntries));
+                                    Log.i("data", String.format("Progress: %d/%d/%d", datalist.size(), totalEntries - nEntriesLeft, totalEntries));
+//                                    expected_useful_download = (int) (totalEntries * datalist.size() / ((totalEntries - nEntriesLeft) * 1.0));
                                     writeSensorLog(String.format("Download Progress: %d/%d", totalEntries - nEntriesLeft, totalEntries), _info, devicename);
                                     total = totalEntries;
                                     if (nEntriesLeft == 0) {
                                         Log.i("data", "Download Completed");
+                                        lastDownloadTS = dl_TS;
                                         writeSensorLog("Download Completed", _success, devicename);
                                         Log.i("data", "Generated " + datalist.size() + " data points");
                                         writeSensorLog("Generated " + datalist.size() + " data points", _success, devicename);
@@ -1379,7 +1378,6 @@ public class ForegroundService extends Service implements ServiceConnection{
                         TimerTask reconnect_long = new TimerTask() {
                             @Override
                             synchronized public void run() {
-//                                Set<String> nearMW = scanBle(5000);
                                 connectionAttemptTS = System.currentTimeMillis();
                                 writeSensorLog("Try to connect", _info, devicename);
                                 board.connect();
