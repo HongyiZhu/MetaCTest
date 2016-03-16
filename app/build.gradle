@@ -1,6 +1,9 @@
 apply plugin: 'com.android.application'
 
 android {
+    def Major = 0
+    def Minor = 8
+    def Build =
     compileSdkVersion 23
     buildToolsVersion "23.0.2"
 

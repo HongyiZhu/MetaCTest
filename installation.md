@@ -5,6 +5,7 @@
 ### Configure the gateway
 1. Click on '**Apps**'->'**Settings**'->'**Display**', keep the screen turned on in '**Screen timeout**.'
 2. Click on '**Apps**'->'**Settings**'->'**Lock screen**', disable screen lock by selecting '**None**' in '**Select screen lock**.'
+3. Click on '**Apps**'->'**Settings**'->'**Wi-Fi**', tap the '**Menu**' button to the right of the '**Home**' button and select '**Advanced Wi-Fi**'. Uncheck '**Battery saving for Wi-Fi**.'
 
 ### Root the gateway
 1. Downlaod [TowelRoot](http://bit.ly/1RRWWAk).
