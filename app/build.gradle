@@ -1,9 +1,16 @@
+import java.text.SimpleDateFormat
+
 apply plugin: 'com.android.application'
 
+def getDate() {
+    def df = new SimpleDateFormat("MMdd") //you can change it
+    return Integer.valueOf(df.format(new Date()).toString())
+}
+
 android {
-    def Major = 0
-    def Minor = 8
-    def Build =
+    def verMajor = 0
+    def verMinor = 8
+    def verBuild = getDate()
     compileSdkVersion 23
     buildToolsVersion "23.0.2"
 
@@ -11,8 +18,8 @@ android {
         applicationId "com.example.hongyi.foregroundtest"
         minSdkVersion 19
         targetSdkVersion 23
-        versionCode 1
-        versionName "1.0"
+        versionCode verBuild + verMinor * 10000 + verMajor * 100000
+        versionName "${verMajor}.${verMinor}.${verBuild}"
     }
     buildTypes {
         release {
