@@ -1159,7 +1159,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                                             @Override
                                             public void process(Message message) {
                                                 long timestamp = System.currentTimeMillis();
-                                                if (timestamp - infoTS >= 870000) {
+                                                if (timestamp - infoTS >= 220000) {
                                                     infoTS = timestamp;
                                                     double ts_in_sec = timestamp / 1000.0;
                                                     String jsonstr = getJSON(devicename, String.format("%.3f", ts_in_sec), String.format("%.3f", message.getData(Float.class)));
@@ -1218,7 +1218,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                             period_expected = (int) (avg_samp_per_min * (period / 60000.0));
 
                             // retrieve temperature and battery info
-                            if (System.currentTimeMillis() - infoTS >= 870000) {
+                            if (System.currentTimeMillis() - infoTS >= 220000) {
                                 final MultiChannelTemperature mcTempModule;
                                 try {
                                     board.readBatteryLevel().onComplete(new AsyncOperation.CompletionHandler<Byte>() {
@@ -1594,7 +1594,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                                                     }
                                                 });
                                             }
-                                        }, 120000, 1800000);
+                                        }, 120000, 240000);
                                     }
                                 });
                     } catch (UnsupportedModuleException e) {
