@@ -1,5 +1,6 @@
 package com.example.hongyi.foregroundtest;
 
+import android.app.DownloadManager;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothManager;
 import android.content.BroadcastReceiver;
@@ -8,7 +9,9 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
+import android.net.Uri;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.IBinder;
 import android.support.v7.app.AppCompatActivity;
@@ -50,6 +53,7 @@ import static com.example.hongyi.foregroundtest.ForegroundService.*;
 public class MainActivity extends AppCompatActivity{
     private MyReceiver broadcastreceiver;
     SimpleDateFormat sdf = new SimpleDateFormat("MMM dd, HH:mm:ss");
+    long download_id;
 
     public class MyReceiver extends BroadcastReceiver {
         private String lb_MAC = "MAC";
@@ -62,36 +66,48 @@ public class MainActivity extends AppCompatActivity{
 
         @Override
         public void onReceive(Context context, Intent intent) {
-            String timestring = "Updated on: " + sdf.format(intent.getLongExtra("timestamp",-1));
-            String MAC = intent.getStringExtra("name");
-            String status = intent.getStringExtra("status");
-            String temperature = intent.getStringExtra("temperature");
-            String index = "";
-            Log.i("Activity", MAC);
-            if (MAC.equals(ForegroundService.getSensors(0))) {
-                index = "_1";
-            } else if (MAC.equals(ForegroundService.getSensors(1))) {
-                index = "_2";
-            } else if (MAC.equals(ForegroundService.getSensors(2))) {
-                index = "_3";
-            } else if (MAC.equals(ForegroundService.getSensors(3))) {
-                index = "_4";
-            } else if (MAC.equals(ForegroundService.getSensors(4))) {
-                index = "_5";
-            }
-            if (!index.equals("")) {
-                TextView TV_MAC = (TextView) findViewById(getResources().getIdentifier(lb_MAC+index,"id","com.example.hongyi.foregroundtest"));
-                TV_MAC.setText(MAC);
-                TextView TV_temperature = (TextView) findViewById(getResources().getIdentifier(lb_temp+index,"id","com.example.hongyi.foregroundtest"));
-                if (!temperature.equals("-99999")) {
-                    TV_temperature.setText(temperature);
-                } else {
-                    TV_temperature.setText("N/A");
+            if (intent.getAction().equals(Constants.NOTIFICATION_ID.BROADCAST_TAG)) {
+                String timestring = "Updated on: " + sdf.format(intent.getLongExtra("timestamp", -1));
+                String MAC = intent.getStringExtra("name");
+                String status = intent.getStringExtra("status");
+                String temperature = intent.getStringExtra("temperature");
+                String index = "";
+                Log.i("Activity", MAC);
+                if (MAC.equals(ForegroundService.getSensors(0))) {
+                    index = "_1";
+                } else if (MAC.equals(ForegroundService.getSensors(1))) {
+                    index = "_2";
+                } else if (MAC.equals(ForegroundService.getSensors(2))) {
+                    index = "_3";
+                } else if (MAC.equals(ForegroundService.getSensors(3))) {
+                    index = "_4";
+                } else if (MAC.equals(ForegroundService.getSensors(4))) {
+                    index = "_5";
                 }
-                TextView TV_Status = (TextView) findViewById(getResources().getIdentifier(lb_status+index,"id","com.example.hongyi.foregroundtest"));
-                TV_Status.setText(status);
-                TextView TV_TS = (TextView) findViewById(getResources().getIdentifier(lb_TS+index,"id","com.example.hongyi.foregroundtest"));
-                TV_TS.setText(timestring);
+                if (!index.equals("")) {
+                    TextView TV_MAC = (TextView) findViewById(getResources().getIdentifier(lb_MAC + index, "id", "com.example.hongyi.foregroundtest"));
+                    TV_MAC.setText(MAC);
+                    TextView TV_temperature = (TextView) findViewById(getResources().getIdentifier(lb_temp + index, "id", "com.example.hongyi.foregroundtest"));
+                    if (!temperature.equals("-99999")) {
+                        TV_temperature.setText(temperature);
+                    } else {
+                        TV_temperature.setText("N/A");
+                    }
+                    TextView TV_Status = (TextView) findViewById(getResources().getIdentifier(lb_status + index, "id", "com.example.hongyi.foregroundtest"));
+                    TV_Status.setText(status);
+                    TextView TV_TS = (TextView) findViewById(getResources().getIdentifier(lb_TS + index, "id", "com.example.hongyi.foregroundtest"));
+                    TV_TS.setText(timestring);
+                }
+            } else if (intent.getAction().equals(DownloadManager.ACTION_DOWNLOAD_COMPLETE)) {
+                Log.i("Download", "received");
+                Log.i("Download", String.valueOf(intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)));
+                if (intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1) == download_id) {
+                    Log.i("Download", "In building intend");
+                    Uri uri = Uri.parse("file://" + Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).getAbsolutePath() + "/SilverLinkC.apk");
+                    Intent i = new Intent(Intent.ACTION_VIEW);
+                    i.setDataAndType(uri, "application/vnd.android.package-archive");
+                    startActivity(i);
+                }
             }
         }
 
@@ -100,7 +116,6 @@ public class MainActivity extends AppCompatActivity{
             return super.peekService(myContext, service);
         }
     }
-
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -252,6 +267,7 @@ public class MainActivity extends AppCompatActivity{
         broadcastreceiver = new MyReceiver();
         IntentFilter intentfilter = new IntentFilter();
         intentfilter.addAction(Constants.NOTIFICATION_ID.BROADCAST_TAG);
+        intentfilter.addAction(DownloadManager.ACTION_DOWNLOAD_COMPLETE);
         registerReceiver(broadcastreceiver, intentfilter);
 
 
@@ -297,9 +313,25 @@ public class MainActivity extends AppCompatActivity{
             } catch (Exception ex) {
                 ex.printStackTrace();
             }
+        } else if (id == R.id.upgrade) {
+            DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+            String url = "http://bit.ly/1LS4vrq";
+            Uri uri = Uri.parse(url);
+            DownloadManager.Request request = new DownloadManager.Request(uri);
+            request.setAllowedNetworkTypes(DownloadManager.Request.NETWORK_MOBILE | DownloadManager.Request.NETWORK_WIFI);
+            request.setVisibleInDownloadsUi(true);
+
+            File apk = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).getAbsolutePath()+"/SilverLinkC.apk");
+            if (apk.exists()) {
+                apk.delete();
+            }
+
+            request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "SilverLinkC.apk");
+            download_id = dm.enqueue(request);
+            Log.i("Download", String.valueOf(download_id));
         }
 
-        return id == R.id.action_settings || super.onOptionsItemSelected(item);
+        return id == R.id.upgrade || super.onOptionsItemSelected(item);
     }
 
 }

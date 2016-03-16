@@ -1,8 +1,7 @@
 <resources>
     <string name="app_name">SilverLinkC</string>
 
-    <string name="hello_world">Hello world!</string>
-    <string name="action_settings">Settings</string>
+    <string name="upgrade">Upgrade</string>
     <string name="reboot">Reboot</string>
     <string name="degree">°C</string>
     <string name="sensor1">Sensor 1:</string>
