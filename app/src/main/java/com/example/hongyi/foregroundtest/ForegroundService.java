@@ -102,6 +102,7 @@ public class ForegroundService extends Service implements ServiceConnection{
     private Timer restartTM;
     private Set<String> nearByDevices;
     private String send_url_base;
+    private boolean wifiReboot = false;
 
     public static boolean IS_SERVICE_RUNNING = false;
 
@@ -438,6 +439,7 @@ public class ForegroundService extends Service implements ServiceConnection{
         for (int i = 1; i < SENSOR_MAC.size();i++){
             flag = boards.get(i).needs_to_reboot || flag;
         }
+        flag = flag || wifiReboot;
 
         return flag;
     }
@@ -604,7 +606,6 @@ public class ForegroundService extends Service implements ServiceConnection{
         };
 
         restartTM.schedule(scanForRestart, 600000, 240000);
-
     }
 
     @Override
@@ -1147,18 +1148,6 @@ public class ForegroundService extends Service implements ServiceConnection{
                             // Get Temperature and Battery
                             MultiChannelTemperature mcTempModule;
                             try {
-                                board.readBatteryLevel().onComplete(new AsyncOperation.CompletionHandler<Byte>() {
-                                    @Override
-                                    public void success(Byte result) {
-                                        //Send Battery Info
-                                        battery = result.toString();
-                                        Log.i("battery", battery);
-                                        String jsonstr = getJSON(devicename,String.format("%.3f", System.currentTimeMillis()/1000.0), Integer.valueOf(battery));
-                                        postBatteryAsync task = new postBatteryAsync();
-                                        task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, jsonstr);
-//                                        task.execute(jsonstr);
-                                    }
-                                });
                                 mcTempModule = board.getModule(MultiChannelTemperature.class);
                                 final List<MultiChannelTemperature.Source> tempSources= mcTempModule.getSources();
                                 mcTempModule.routeData()
@@ -1170,7 +1159,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                                             @Override
                                             public void process(Message message) {
                                                 long timestamp = System.currentTimeMillis();
-                                                if (timestamp - infoTS >= 210000) {
+                                                if (timestamp - infoTS >= 870000) {
                                                     infoTS = timestamp;
                                                     double ts_in_sec = timestamp / 1000.0;
                                                     String jsonstr = getJSON(devicename, String.format("%.3f", ts_in_sec), String.format("%.3f", message.getData(Float.class)));
@@ -1186,10 +1175,22 @@ public class ForegroundService extends Service implements ServiceConnection{
                                     }
                                 });
                                 mcTempModule.readTemperature(tempSources.get(MultiChannelTemperature.MetaWearProChannel.ON_BOARD_THERMISTOR));
+                                board.readBatteryLevel().onComplete(new AsyncOperation.CompletionHandler<Byte>() {
+                                    @Override
+                                    public void success(Byte result) {
+                                        //Send Battery Info
+                                        battery = result.toString();
+                                        Log.i("battery", battery);
+                                        String jsonstr = getJSON(devicename, String.format("%.3f", System.currentTimeMillis() / 1000.0), Integer.valueOf(battery));
+                                        postBatteryAsync task = new postBatteryAsync();
+                                        task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, jsonstr);
+                                    }
+                                });
                             } catch (UnsupportedModuleException e) {
                                 e.printStackTrace();
                             }
 
+                            // Disconnect from the board
                             configured = true;
                             timer.schedule(new TimerTask() {
                                 @Override
@@ -1204,7 +1205,6 @@ public class ForegroundService extends Service implements ServiceConnection{
                                     broadcastStatus();
                                 }
                             }, 20000);
-//                        board.disconnect();
                         } catch (UnsupportedModuleException e) {
                             e.printStackTrace();
                         }
@@ -1218,7 +1218,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                             period_expected = (int) (avg_samp_per_min * (period / 60000.0));
 
                             // retrieve temperature and battery info
-                            if (System.currentTimeMillis() - infoTS >= 210000) {
+                            if (System.currentTimeMillis() - infoTS >= 870000) {
                                 final MultiChannelTemperature mcTempModule;
                                 try {
                                     board.readBatteryLevel().onComplete(new AsyncOperation.CompletionHandler<Byte>() {
@@ -1573,7 +1573,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                                             public void run() {
                                                 mcTempModule.readTemperature(tempSources.get(MultiChannelTemperature.MetaWearProChannel.ON_BOARD_THERMISTOR));
                                             }
-                                        }, 0, 240000);
+                                        }, 0, 900000);
 
                                         timer.schedule(new TimerTask() {
                                             @Override
@@ -1594,7 +1594,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                                                     }
                                                 });
                                             }
-                                        }, 120000,240000);
+                                        }, 120000, 1800000);
                                     }
                                 });
                     } catch (UnsupportedModuleException e) {
