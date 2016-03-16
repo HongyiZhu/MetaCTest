@@ -2,6 +2,10 @@
 
 ## Preparing the set
 
+### Configure the gateway
+1. Click on '**Apps**'->'**Settings**'->'**Display**', keep the screen turned on in '**Screen timeout**.'
+2. Click on '**Apps**'->'**Settings**'->'**Lock screen**', disable screen lock by selecting '**None**' in '**Select screen lock**.'
+
 ### Root the gateway
 1. Downlaod [TowelRoot](http://bit.ly/1RRWWAk).
 2. Install the application and ignore the warning. Finish the installation and open the application.
@@ -11,11 +15,18 @@
 	+ Uncheck '**Re-authentication**'
 	+ Select and change '**default access**' to **Grant**
 	+ Uncheck '**Show notifications**'
+6. Open '**Downloads**' in '**Apps**' (bottom right of the home screen) and click '**Delete**' on the upper right corner. Select and remove all .apk files.
+
 
 ### Install/Upgrade the SilverLink Gateway Application
 1. Download [SilverLinkC.apk](http://bit.ly/1LS4vrq) and install the application.
 2. Open the application after installation.
 
-### Read gateway logs on the phone
+### Read gateway logs on the gateway
 1. Download and install [ES File Explorer](http://bit.ly/1LS7gZH).
-2. Go to Directory 
+2. Go to Directory `/sdcard/Android/data/com.example.hongyi.foregroundtest/files/logs/`, all the log files are in the folder.
+
+### Download log files to computer
+1. Connect the gateway to a computer
+2. Reboot the gateway and select 'MTP' mode on the gateway
+3. Find the log files on the device under folder: <br/>`LGL34C/Internal Storage/Android/data/com.example.hongyi.foregroundtest/files/logs/`.

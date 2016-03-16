@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/ForegroundTest.iml" filepath="$PROJECT_DIR$/ForegroundTest.iml" />
+      <module fileurl="file://$PROJECT_DIR$/MetaCTest.iml" filepath="$PROJECT_DIR$/MetaCTest.iml" />
       <module fileurl="file://$PROJECT_DIR$/app/app.iml" filepath="$PROJECT_DIR$/app/app.iml" />
     </modules>
   </component>
