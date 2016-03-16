@@ -30,3 +30,8 @@
 1. Connect the gateway to a computer
 2. Reboot the gateway and select 'MTP' mode on the gateway
 3. Find the log files on the device under folder: <br/>`LGL34C/Internal Storage/Android/data/com.example.hongyi.foregroundtest/files/logs/`.
+
+### Update sensor firmwear
+1. Open '**Apps**'->'**Metawear**', select the sensor to be updated.
+2. Connect to the sensor and click on 'Update Firmwear'.
+3. After update, disconnect from the sensor.
