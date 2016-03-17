@@ -2,6 +2,7 @@ package com.example.hongyi.foregroundtest;
 
 /**
  * Created by Hongyi on 11/9/2015.
+ * Foreground Service handles all the BLE connections
  */
 import android.annotation.TargetApi;
 import android.app.Notification;
@@ -20,8 +21,6 @@ import android.content.Intent;
 import android.content.ServiceConnection;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.net.ConnectivityManager;
-import android.net.NetworkInfo;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.IBinder;
@@ -29,16 +28,8 @@ import android.os.ParcelUuid;
 import android.support.v7.app.NotificationCompat;
 import android.util.Log;
 
-import com.mbientlab.metawear.AsyncOperation;
-import com.mbientlab.metawear.Message;
 import com.mbientlab.metawear.MetaWearBleService;
 import com.mbientlab.metawear.MetaWearBoard;
-import com.mbientlab.metawear.RouteManager;
-import com.mbientlab.metawear.UnsupportedModuleException;
-import com.mbientlab.metawear.data.CartesianFloat;
-import com.mbientlab.metawear.module.Bmi160Accelerometer;
-import com.mbientlab.metawear.module.Logging;
-import com.mbientlab.metawear.module.MultiChannelTemperature;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -48,29 +39,20 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.OutputStream;
 import java.io.OutputStreamWriter;
-import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
-import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.lang.Math;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Hashtable;
-import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
@@ -102,6 +84,8 @@ public class ForegroundService extends Service implements ServiceConnection{
     private Set<String> nearByDevices;
     public String send_url_base;
     private boolean wifiReboot = false;
+    private BluetoothAdapter.LeScanCallback deprecatedScanCallback= null;
+    private ScanCallback api21ScallCallback= null;
 
     public static boolean IS_SERVICE_RUNNING = false;
 
@@ -329,9 +313,6 @@ public class ForegroundService extends Service implements ServiceConnection{
         // Used only in case if services are bound (Bound Services).
         return null;
     }
-
-    private BluetoothAdapter.LeScanCallback deprecatedScanCallback= null;
-    private ScanCallback api21ScallCallback= null;
 
     @TargetApi(22)
     public Set<String> scanBle(long interval) {

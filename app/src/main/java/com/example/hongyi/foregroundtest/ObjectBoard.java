@@ -230,7 +230,7 @@ public class ObjectBoard extends Board{
                                     battery = result.toString();
                                     Log.i("battery", battery);
                                     String jsonstr = getJSON(devicename, String.format("%.3f", System.currentTimeMillis() / 1000.0), Integer.valueOf(battery));
-                                    postBatteryAsync task = new postBatteryAsync();
+                                    postBatteryAsync task = new postBatteryAsync(service);
                                     task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, jsonstr);
                                 }
                             });
@@ -276,7 +276,7 @@ public class ObjectBoard extends Board{
                                         battery = result.toString();
                                         Log.i("battery_" + devicename, battery);
                                         String jsonstr = getJSON(devicename,String.format("%.3f", System.currentTimeMillis()/1000.0), Integer.valueOf(battery));
-                                        postBatteryAsync task = new postBatteryAsync();
+                                        postBatteryAsync task = new postBatteryAsync(service);
                                         task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, jsonstr);
 //                                            task.execute(jsonstr);
                                     }

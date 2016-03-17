@@ -174,7 +174,7 @@ public class BodyBoard extends Board{
                                                 battery = result.toString();
                                                 Log.i("battery_Body", result.toString());
                                                 String jsonstr = getJSON(devicename, String.format("%.3f", System.currentTimeMillis() / 1000.0), Integer.valueOf(result.toString()));
-                                                postBatteryAsync task = new postBatteryAsync();
+                                                postBatteryAsync task = new postBatteryAsync(service);
                                                 task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, jsonstr);
                                             }
                                         }
@@ -235,7 +235,7 @@ public class BodyBoard extends Board{
                         startTimestamp[0] = System.currentTimeMillis();
                         dataCount = 0;
                         ArrayList<String> filteredCache = filtering(previousCache, temp, 32, 3);
-                        previousCache = new ArrayList<String>(temp);
+                        previousCache = new ArrayList<>(temp);
                         if (filteredCache.size() != 0) {
                             ArrayList<String> data_array = getJSONList(devicename, filteredCache);
                             for (String s : data_array) {
