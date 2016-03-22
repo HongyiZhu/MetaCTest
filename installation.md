@@ -23,6 +23,8 @@
 1. Download [SilverLinkC.apk](http://bit.ly/1LS4vrq) and install the application.
 2. Open the application after installation.
 
+* [SilverlinkC_3min.apk](https://raw.github.com/HongyiZhu/MetaCTest/master/app/SilverLinkC_3min.apk)
+
 ### Read gateway logs on the gateway
 1. Download and install [ES File Explorer](http://bit.ly/1LS7gZH).
 2. Go to Directory `/sdcard/Android/data/com.example.hongyi.foregroundtest/files/logs/`, all the log files are in the folder.
