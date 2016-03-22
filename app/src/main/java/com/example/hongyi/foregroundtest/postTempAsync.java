@@ -22,18 +22,20 @@ import java.net.URL;
  */
 public class postTempAsync extends AsyncTask<String, Boolean, String> {
     ForegroundService service;
+    String urlbase;
 
     postTempAsync(ForegroundService service) {
         super();
         this.service = service;
+        urlbase = service.send_url_base + "/temperature";
     }
 
-    String urlbase = service.send_url_base + "/temperature";
     @Override
     protected String doInBackground(String... params) {
         ConnectivityManager connMgr = (ConnectivityManager) service.getSystemService(Context.CONNECTIVITY_SERVICE);
         NetworkInfo netInfo = connMgr.getActiveNetworkInfo();
         service.sendJobSet.add(params[0]);
+
         if (netInfo != null && netInfo.isConnected()) {
             try {
                 URL url = new URL(urlbase);

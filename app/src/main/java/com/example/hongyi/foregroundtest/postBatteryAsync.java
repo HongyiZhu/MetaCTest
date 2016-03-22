@@ -22,13 +22,15 @@ import java.net.URL;
  */
 public class postBatteryAsync extends AsyncTask<String, Boolean, String> {
     ForegroundService service;
+    String urlbase;
 
     postBatteryAsync (ForegroundService service) {
         super();
         this.service = service;
+        urlbase = service.send_url_base + "/battery";
     }
 
-    String urlbase = service.send_url_base + "/battery";
+
     @Override
     protected String doInBackground(String... params) {
         ConnectivityManager connMgr = (ConnectivityManager) service.getSystemService(Context.CONNECTIVITY_SERVICE);

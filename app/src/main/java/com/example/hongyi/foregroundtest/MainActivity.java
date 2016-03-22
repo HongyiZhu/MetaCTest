@@ -23,6 +23,15 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
 
+import com.android.volley.AuthFailureError;
+import com.android.volley.Request;
+import com.android.volley.RequestQueue;
+import com.android.volley.Response;
+import com.android.volley.VolleyError;
+import com.android.volley.toolbox.JsonObjectRequest;
+import com.android.volley.toolbox.StringRequest;
+import com.android.volley.toolbox.Volley;
+
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -47,6 +56,8 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.net.URLConnection;
 import java.text.SimpleDateFormat;
+import java.util.HashMap;
+import java.util.Map;
 
 import static com.example.hongyi.foregroundtest.ForegroundService.*;
 
@@ -54,6 +65,7 @@ public class MainActivity extends AppCompatActivity{
     private MyReceiver broadcastreceiver;
     SimpleDateFormat sdf = new SimpleDateFormat("MMM dd, HH:mm:ss");
     long download_id;
+    String phoneID;
 
     public class MyReceiver extends BroadcastReceiver {
         private String lb_MAC = "MAC";
@@ -120,8 +132,9 @@ public class MainActivity extends AppCompatActivity{
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         System.setProperty("http.keepAlive", "false");
-        String phoneID = ((TelephonyManager) getSystemService(TELEPHONY_SERVICE)).getDeviceId();
+        phoneID = ((TelephonyManager) getSystemService(TELEPHONY_SERVICE)).getDeviceId();
         Log.i("phoneID", phoneID);
+//        mQueue = Volley.newRequestQueue(this);
         if (!IS_SERVICE_RUNNING) {
             ConnectivityManager connMgr = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
             NetworkInfo netInfo = connMgr.getActiveNetworkInfo();
@@ -195,8 +208,9 @@ public class MainActivity extends AppCompatActivity{
             Thread getReq = new Thread() {
                 @Override
                 public void run() {
-                    String phoneID = ((TelephonyManager) getSystemService(TELEPHONY_SERVICE)).getDeviceId();
+                    phoneID = ((TelephonyManager) getSystemService(TELEPHONY_SERVICE)).getDeviceId();
                     Log.i("phoneID", phoneID);
+
                     URL url;
                     HttpURLConnection connection = null;
                     try {
@@ -269,14 +283,6 @@ public class MainActivity extends AppCompatActivity{
         intentfilter.addAction(Constants.NOTIFICATION_ID.BROADCAST_TAG);
         intentfilter.addAction(DownloadManager.ACTION_DOWNLOAD_COMPLETE);
         registerReceiver(broadcastreceiver, intentfilter);
-
-
-
-//        if (!IS_SERVICE_RUNNING) {
-//            service.setAction(Constants.ACTION.STARTFOREGROUND_ACTION);
-//            IS_SERVICE_RUNNING = true;
-//            startService(service);
-//        }
     }
 
     @Override

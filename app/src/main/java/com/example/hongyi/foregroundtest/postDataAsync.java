@@ -22,13 +22,15 @@ import java.net.URL;
  */
 public class postDataAsync extends AsyncTask<String, Boolean, String> {
     ForegroundService service;
+    String urlbase;
 
     postDataAsync (ForegroundService service) {
         super();
         this.service = service;
+        urlbase = service.send_url_base + "/logs";
     }
 
-    String urlbase = service.send_url_base + "/logs";
+
 
     @Override
     protected String doInBackground(String... params) {

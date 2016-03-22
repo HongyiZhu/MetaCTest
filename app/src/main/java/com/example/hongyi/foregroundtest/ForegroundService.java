@@ -86,6 +86,7 @@ public class ForegroundService extends Service implements ServiceConnection{
     private boolean wifiReboot = false;
     private BluetoothAdapter.LeScanCallback deprecatedScanCallback= null;
     private ScanCallback api21ScallCallback= null;
+    private long next_3am;
 
     public static boolean IS_SERVICE_RUNNING = false;
 
@@ -97,7 +98,7 @@ public class ForegroundService extends Service implements ServiceConnection{
         dataPool = Executors.newCachedThreadPool();
     }
 
-    public String getSensors(int i) {
+    public static String getSensors(int i) {
         String MAC;
         try {
             MAC = SENSOR_MAC.get(i);
@@ -146,6 +147,16 @@ public class ForegroundService extends Service implements ServiceConnection{
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        Calendar now = Calendar.getInstance();
+        if (now.get(Calendar.HOUR_OF_DAY) >= 3) {
+            now.add(Calendar.DATE, 1);
+        }
+        now.set(Calendar.HOUR_OF_DAY, 3);
+        now.set(Calendar.MINUTE, 0);
+        now.set(Calendar.SECOND, 0);
+        now.set(Calendar.MILLISECOND, 0);
+        next_3am = now.getTimeInMillis();
+
         sendJobSet = new HashSet<>();
         String address = (getApplicationContext().getExternalFilesDirs("")[0].getAbsolutePath()).contains("external_SD") ? getApplicationContext().getExternalFilesDirs("")[1].getAbsolutePath() : getApplicationContext().getExternalFilesDirs("")[0].getAbsolutePath();
         File folder = new File(address);
@@ -294,15 +305,13 @@ public class ForegroundService extends Service implements ServiceConnection{
     public void onDestroy() {
         Log.i(LOG_TAG, "In onDestroy");
         writeSensorLog("In onDestroy", _info);
-        boards.get(0).accel_module.stop();
-        boards.get(0).accel_module.disableAxisSampling();
-        boards.get(0).ActiveDisconnect = true;
-        boards.get(0).board.disconnect();
+        ((BodyLogBoard) boards.get(0)).first = -1;
+        boards.get(0).board.connect();
         Log.i(LOG_TAG, "Body sensor destroyed");
         writeSensorLog("Body sensor destroyed", _info);
 
-        super.onDestroy();
         getApplicationContext().unbindService(this);
+        super.onDestroy();
         Log.i(LOG_TAG, "All destruction finished");
         writeSensorLog("All destruction finished", _info);
 //        Toast.makeText(this, "Service Detroyed!", Toast.LENGTH_SHORT).show();
@@ -416,7 +425,13 @@ public class ForegroundService extends Service implements ServiceConnection{
 
     private boolean need_reboot() {
         boolean flag = false;
-        for (int i = 1; i < SENSOR_MAC.size();i++){
+
+        //
+        if (System.currentTimeMillis() > next_3am) {
+            flag = true;
+        }
+
+        for (int i = 0; i < SENSOR_MAC.size();i++){
             flag = boards.get(i).needs_to_reboot || flag;
         }
         flag = flag || wifiReboot;
@@ -470,7 +485,7 @@ public class ForegroundService extends Service implements ServiceConnection{
 
         // Add body sensor
         BluetoothDevice btDevice = btAdapter.getRemoteDevice(SENSOR_MAC.get(0));
-        boards.add(new BodyBoard(this, serviceBinder.getMetaWearBoard(btDevice), SENSOR_MAC.get(0), 12.5f));
+        boards.add(new BodyLogBoard(this, serviceBinder.getMetaWearBoard(btDevice), SENSOR_MAC.get(0), 12.5f));
         Log.i(LOG_TAG, "Body Board added");
         writeSensorLog("Body Board added", _info);
 
@@ -482,10 +497,11 @@ public class ForegroundService extends Service implements ServiceConnection{
             writeSensorLog("Object Board added", _info);
         }
 
-        BodyBoard body = (BodyBoard) boards.get(0);
+        BodyLogBoard body = (BodyLogBoard) boards.get(0);
         body.sensor_status = body.CONNECTING;
         body.broadcastStatus();
         writeSensorLog("Try to connect", _info, body.devicename);
+        body.connectionAttemptTS = System.currentTimeMillis();
         body.board.connect();
         try {
             Thread.sleep(5000);
