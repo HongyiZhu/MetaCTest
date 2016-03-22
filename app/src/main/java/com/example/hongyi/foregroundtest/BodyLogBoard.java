@@ -24,6 +24,7 @@ import java.util.TimerTask;
  * Created by Hongyi on 3/17/2016.
  */
 public class BodyLogBoard extends Board{
+    private int minute_interval = 3;
     private final float sampleFreq;
     public String devicename;
     private final String SENSOR_DATA_LOG;
@@ -450,7 +451,7 @@ public class BodyLogBoard extends Board{
                     timer.schedule(reconnect_after_reset, 30000);
                     service.writeSensorLog("Disconnected from the sensor and scheduled next connection in " + 30000 + " ms", ForegroundService._info, devicename);
                 } else if (first == 2) {
-                    long interval = 120000 - (System.currentTimeMillis() - connectionAttemptTS) % 120000;
+                    long interval = 60000 * minute_interval - (System.currentTimeMillis() - connectionAttemptTS) % (60000 * minute_interval);
                     TimerTask reconnect = new TimerTask() {
                         @Override
                         synchronized public void run() {
