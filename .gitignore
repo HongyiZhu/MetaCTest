@@ -5,3 +5,5 @@
 .DS_Store
 /build
 /captures
+MetaCTest.iml
+/.idea/misc.xml
