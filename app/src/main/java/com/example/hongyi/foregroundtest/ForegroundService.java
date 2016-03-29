@@ -480,7 +480,7 @@ public class ForegroundService extends Service implements ServiceConnection{
             }
         }
 
-        Set<String> nearMW = scanBle(5000);
+        Set<String> nearMW = scanBle(8000);
         Log.i("BLE", String.valueOf(nearMW.size()));
 
         // Add body sensor

@@ -24,7 +24,9 @@ public class Board {
     public String MAC_ADDRESS;
     public String temperature = "-99999";
     public String battery;
+    public int low_battery_thres = 3;
     public boolean needs_to_reboot;
+    public boolean gatt_error;
     public final String CONNECTED = "Connected.\nStreaming Data",
             AWAY = "Sensor out of range",
             DISCONNECTED_BODY = "Lost connection.\nReconnecting",
@@ -34,6 +36,7 @@ public class Board {
             CONNECTING = "Connecting",
             INITIATED = "Board reset",
             LOG_TAG = "Board_Log",
+            OUT_OF_BATTERY = "Out of Battery\nContact support team",
             DOWNLOAD_COMPLETED = "Data download completed";
     public Board(ForegroundService service) {
         this.service = service;

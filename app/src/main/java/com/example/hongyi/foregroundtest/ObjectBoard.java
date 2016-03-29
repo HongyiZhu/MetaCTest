@@ -16,6 +16,7 @@ import com.mbientlab.metawear.module.MultiChannelTemperature;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
+import java.util.PriorityQueue;
 import java.util.TimerTask;
 
 /**
@@ -156,11 +157,13 @@ public class ObjectBoard extends Board{
         this.timer = new java.util.Timer();
         this.datalist = new ArrayList<>();
         this.needs_to_reboot = false;
+        this.gatt_error = false;
 
         this.board.setConnectionStateHandler(new MyMetaWearBoardConnectionStateHandler(service) {
             @Override
             public void connected() {
                 needs_to_reboot = false;
+                gatt_error = false;
                 connectionFailureCount = 0;
                 if (first == 0) {
                     first = 1;
@@ -232,6 +235,11 @@ public class ObjectBoard extends Board{
                                     String jsonstr = getJSON(devicename, String.format("%.3f", System.currentTimeMillis() / 1000.0), Integer.valueOf(battery));
                                     postBatteryAsync task = new postBatteryAsync(service);
                                     task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, jsonstr);
+                                    if (Integer.valueOf(battery) <= low_battery_thres) {
+                                        sensor_status = OUT_OF_BATTERY;
+                                        first = -2;
+                                        broadcastStatus();
+                                    }
                                 }
                             });
                         } catch (UnsupportedModuleException e) {
@@ -249,8 +257,10 @@ public class ObjectBoard extends Board{
                                     e.printStackTrace();
                                 }
                                 board.disconnect();
-                                sensor_status = CONFIGURED;
-                                broadcastStatus();
+                                if (!sensor_status.equals(OUT_OF_BATTERY)) {
+                                    sensor_status = CONFIGURED;
+                                    broadcastStatus();
+                                }
                             }
                         }, 20000);
                     } catch (UnsupportedModuleException e) {
@@ -278,6 +288,11 @@ public class ObjectBoard extends Board{
                                         String jsonstr = getJSON(devicename,String.format("%.3f", System.currentTimeMillis()/1000.0), Integer.valueOf(battery));
                                         postBatteryAsync task = new postBatteryAsync(service);
                                         task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, jsonstr);
+                                        if (Integer.valueOf(battery) <= low_battery_thres) {
+                                            sensor_status = OUT_OF_BATTERY;
+                                            first = -2;
+                                            broadcastStatus();
+                                        }
 //                                            task.execute(jsonstr);
                                     }
                                 });
@@ -306,11 +321,12 @@ public class ObjectBoard extends Board{
                                         datalist.clear();
                                         total = 0;
                                         board.disconnect();
-                                        sensor_status = DISCONNECTED_OBJ;
-                                        broadcastStatus();
+                                        if (!sensor_status.equals(OUT_OF_BATTERY)) {
+                                            sensor_status = DISCONNECTED_OBJ;
+                                            broadcastStatus();
+                                        }
                                     } else {
                                         service.writeSensorLog("Activity not logged, Reset", ForegroundService._error, devicename);
-                                        first = 1;
                                         try {
                                             accel_module = board.getModule(Bmi160Accelerometer.class);
                                             accel_module.stop();
@@ -323,9 +339,12 @@ public class ObjectBoard extends Board{
                                         }
                                         board.removeRoutes();
                                         board.disconnect();
-                                        sensor_status = INITIATED;
-                                        lastDownloadTS = dl_TS;
-                                        broadcastStatus();
+                                        if (!sensor_status.equals(OUT_OF_BATTERY)) {
+                                            sensor_status = INITIATED;
+                                            lastDownloadTS = dl_TS;
+                                            broadcastStatus();
+                                            first = 1;
+                                        }
                                     }
                                 }
                             }
@@ -346,7 +365,9 @@ public class ObjectBoard extends Board{
                                     service.writeSensorLog("Download Completed", ForegroundService._success, devicename);
                                     Log.i("data", "Generated " + datalist.size() + " data points");
                                     service.writeSensorLog("Generated " + datalist.size() + " data points", ForegroundService._success, devicename);
-                                    sensor_status = DISCONNECTED_OBJ;
+                                    if (!sensor_status.equals(OUT_OF_BATTERY)) {
+                                        sensor_status = DISCONNECTED_OBJ;
+                                    }
                                     //process listed data
                                     // send to server
                                     ArrayList<String> data = getFilteredDataCache((ArrayList<CartesianFloat>)datalist, dl_TS);
@@ -357,12 +378,13 @@ public class ObjectBoard extends Board{
                                         }
                                     }
                                     datalist.clear();
-                                    sensor_status = DOWNLOAD_COMPLETED;
+                                    if (!sensor_status.equals(OUT_OF_BATTERY)) {
+                                        sensor_status = DOWNLOAD_COMPLETED;
+                                    }
 
-                                    if (total < 300 || remaining_space < 400) {
+                                    if (total < 300 && !sensor_status.equals(OUT_OF_BATTERY)) {
                                         service.writeSensorLog("Available records: " + total + " Remaining space: " + remaining_space, ForegroundService._info, devicename);
                                         service.writeSensorLog("No enough space on sensor, Reset", ForegroundService._error, devicename);
-                                        first = 1;
                                         board.removeRoutes();
                                         try {
                                             Logging logger = board.getModule(Logging.class);
@@ -375,6 +397,7 @@ public class ObjectBoard extends Board{
                                             e.printStackTrace();
                                         }
                                         sensor_status = INITIATED;
+                                        first = 1;
                                     }
 
                                     total = 0;
@@ -409,7 +432,7 @@ public class ObjectBoard extends Board{
 
             @Override
             public void disconnected() {
-                if (first != -1) {
+                if (first >= 0) {
                     long interval = 240000 - (System.currentTimeMillis() - connectionAttemptTS) % 240000;
                     TimerTask reconnect = new TimerTask() {
                         @Override
@@ -427,12 +450,15 @@ public class ObjectBoard extends Board{
 
             @Override
             public void failure(int status, Throwable error) {
-                if (first != -1) {
+                if (first == -2) {
+
+                } else if (first != -1) {
                     error.printStackTrace();
                     service.writeSensorLog(error.getMessage(), ForegroundService._error, devicename);
                     sensor_status = FAILURE;
                     broadcastStatus();
-                    if (error.getMessage().contains("status: 257") || error.getMessage().contains("Error connecting to gatt server")) {
+                    gatt_error = !error.getMessage().contains("Error connecting to gatt server");
+                    if (error.getMessage().contains("status: 257")) {
                         needs_to_reboot = true;
                     }
                     connectionFailureCount += 1;

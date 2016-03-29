@@ -16,6 +16,7 @@ import com.mbientlab.metawear.module.MultiChannelTemperature;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -24,7 +25,7 @@ import java.util.TimerTask;
  * Created by Hongyi on 3/17/2016.
  */
 public class BodyLogBoard extends Board{
-    private int minute_interval = 3;
+    private int minute_interval = 2;
     private final float sampleFreq;
     public String devicename;
     private final String SENSOR_DATA_LOG;
@@ -162,11 +163,13 @@ public class BodyLogBoard extends Board{
         this.timer = new java.util.Timer();
         this.datalist = new ArrayList<>();
         this.needs_to_reboot = false;
+        this.gatt_error = false;
         this.away = false;
 
         this.board.setConnectionStateHandler(new MyMetaWearBoardConnectionStateHandler(service) {
             @Override
             public void connected() {
+                gatt_error = false;
                 needs_to_reboot = false;
                 scanCount = 0;
                 connectionFailureCount = 0;
@@ -245,6 +248,11 @@ public class BodyLogBoard extends Board{
                                     String jsonstr = getJSON(devicename, String.format("%.3f", System.currentTimeMillis() / 1000.0), Integer.valueOf(battery));
                                     postBatteryAsync task = new postBatteryAsync(service);
                                     task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, jsonstr);
+                                    if (Integer.valueOf(battery) <= low_battery_thres) {
+                                        sensor_status = OUT_OF_BATTERY;
+                                        first = -2;
+                                        broadcastStatus();
+                                    }
                                 }
                             });
                         } catch (UnsupportedModuleException e) {
@@ -262,8 +270,10 @@ public class BodyLogBoard extends Board{
                                     e.printStackTrace();
                                 }
                                 board.disconnect();
-                                sensor_status = CONFIGURED;
-                                broadcastStatus();
+                                if (!sensor_status.equals(OUT_OF_BATTERY)) {
+                                    sensor_status = CONFIGURED;
+                                    broadcastStatus();
+                                }
                             }
                         }, 20000);
                     } catch (UnsupportedModuleException e) {
@@ -291,6 +301,11 @@ public class BodyLogBoard extends Board{
                                         String jsonstr = getJSON(devicename,String.format("%.3f", System.currentTimeMillis()/1000.0), Integer.valueOf(battery));
                                         postBatteryAsync task = new postBatteryAsync(service);
                                         task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, jsonstr);
+                                        if (Integer.valueOf(battery) <= low_battery_thres) {
+                                            sensor_status = OUT_OF_BATTERY;
+                                            first = -2;
+                                            broadcastStatus();
+                                        }
 //                                            task.execute(jsonstr);
                                     }
                                 });
@@ -321,11 +336,12 @@ public class BodyLogBoard extends Board{
                                         datalist.clear();
                                         total = 0;
                                         board.disconnect();
-                                        sensor_status = DISCONNECTED_OBJ;
-                                        broadcastStatus();
+                                        if (!sensor_status.equals(OUT_OF_BATTERY)) {
+                                            sensor_status = DISCONNECTED_OBJ;
+                                            broadcastStatus();
+                                        }
                                     } else {
                                         service.writeSensorLog("Activity not logged, Reset", ForegroundService._error, devicename);
-                                        first = 1;
                                         try {
                                             accel_module = board.getModule(Bmi160Accelerometer.class);
                                             accel_module.stop();
@@ -338,9 +354,12 @@ public class BodyLogBoard extends Board{
                                         }
                                         board.removeRoutes();
                                         board.disconnect();
-                                        sensor_status = INITIATED;
-                                        lastDownloadTS = dl_TS;
-                                        broadcastStatus();
+                                        if (!sensor_status.equals(OUT_OF_BATTERY)) {
+                                            sensor_status = INITIATED;
+                                            first = 1;
+                                            lastDownloadTS = dl_TS;
+                                            broadcastStatus();
+                                        }
                                     }
                                 }
                             }
@@ -366,7 +385,9 @@ public class BodyLogBoard extends Board{
                                         service.writeSensorLog("Download Completed", ForegroundService._success, devicename);
                                         Log.i("data", "Generated " + datalist.size() + " data points");
                                         service.writeSensorLog("Generated " + datalist.size() + " data points", ForegroundService._success, devicename);
-                                        sensor_status = DISCONNECTED_OBJ;
+                                        if (!sensor_status.equals(OUT_OF_BATTERY)) {
+                                            sensor_status = DISCONNECTED_OBJ;
+                                        }
                                         //process listed data
                                         // send to server
                                         ArrayList<String> data = getFilteredDataCache((ArrayList<CartesianFloat>) datalist, dl_TS);
@@ -377,7 +398,27 @@ public class BodyLogBoard extends Board{
                                             }
                                         }
                                         datalist.clear();
-                                        sensor_status = DOWNLOAD_COMPLETED;
+                                        if (!sensor_status.equals(OUT_OF_BATTERY)) {
+                                            sensor_status = DOWNLOAD_COMPLETED;
+                                        }
+
+                                        if (total < 300 && !sensor_status.equals(OUT_OF_BATTERY)) {
+                                            service.writeSensorLog("Available records: " + total, ForegroundService._info, devicename);
+                                            service.writeSensorLog("No enough space on sensor, Reset", ForegroundService._error, devicename);
+                                            first = 1;
+                                            board.removeRoutes();
+                                            try {
+                                                Logging logger = board.getModule(Logging.class);
+                                                logger.stopLogging();
+                                                accel_module = board.getModule(Bmi160Accelerometer.class);
+                                                accel_module.stop();
+                                                accel_module.disableAxisSampling();
+                                                logger.clearEntries();
+                                            } catch (UnsupportedModuleException e) {
+                                                e.printStackTrace();
+                                            }
+                                            sensor_status = INITIATED;
+                                        }
 
                                         total = 0;
 
@@ -402,20 +443,22 @@ public class BodyLogBoard extends Board{
                             });
                         } else {
                             service.writeSensorLog("No enough space on sensor, Reset", ForegroundService._error, devicename);
-                            first = 1;
-                            board.removeRoutes();
-                            try {
-                                logger = board.getModule(Logging.class);
-                                logger.stopLogging();
-                                accel_module = board.getModule(Bmi160Accelerometer.class);
-                                accel_module.stop();
-                                accel_module.disableAxisSampling();
-                                logger.clearEntries();
-                                total = 0;
-                            } catch (UnsupportedModuleException e) {
-                                e.printStackTrace();
+                            if (!sensor_status.equals(OUT_OF_BATTERY)) {
+                                first = 1;
+                                board.removeRoutes();
+                                try {
+                                    logger = board.getModule(Logging.class);
+                                    logger.stopLogging();
+                                    accel_module = board.getModule(Bmi160Accelerometer.class);
+                                    accel_module.stop();
+                                    accel_module.disableAxisSampling();
+                                    logger.clearEntries();
+                                    total = 0;
+                                } catch (UnsupportedModuleException e) {
+                                    e.printStackTrace();
+                                }
+                                sensor_status = INITIATED;
                             }
-                            sensor_status = INITIATED;
                             total = 0;
 
                             timer.schedule(new TimerTask() {
@@ -468,44 +511,47 @@ public class BodyLogBoard extends Board{
 
             @Override
             public void failure(int status, Throwable error) {
-                connectionFailureCount += 1;
-                if (!away && connectionFailureCount <= 5) {
-                    if (searchTM != null) {
-                        searchTM.cancel();
-                        searchTM.purge();
-                        searchTM = null;
-                    }
-                    error.printStackTrace();
-                    service.writeSensorLog(error.getMessage(), ForegroundService._error, devicename);
-                    sensor_status = FAILURE;
-                    broadcastStatus();
-                    if (error.getMessage().contains("status: 257") || error.getMessage().contains("Error connecting to gatt server")) {
-                        needs_to_reboot = true;
-                    }
-                    if (scanCount >= 3) {
-                        needs_to_reboot = true;
-                    }
-                    broadcastStatus();
-                    service.writeSensorLog("Try to connect", ForegroundService._info, devicename);
-                    board.connect();
-                } else {
-                    searchTM = new Timer();
-                    connectionFailureCount = 0;
-                    searchTM.schedule(new TimerTask() {
-                        @Override
-                        public void run() {
-                            Set<String> nearMW = service.scanBle(8000);
-                            if (nearMW.contains(service.getSensors(0))) {
-                                away = false;
-                                scanCount += 1;
-                                board.connect();
-                            } else {
-                                away = true;
-                                sensor_status = AWAY;
-                                broadcastStatus();
-                            }
+                if (first != -2) {
+                    connectionFailureCount += 1;
+                    if (!away && connectionFailureCount <= 5) {
+                        if (searchTM != null) {
+                            searchTM.cancel();
+                            searchTM.purge();
+                            searchTM = null;
                         }
-                    }, 0, 120000);
+                        error.printStackTrace();
+                        service.writeSensorLog(error.getMessage(), ForegroundService._error, devicename);
+                        sensor_status = FAILURE;
+                        broadcastStatus();
+                        gatt_error = !error.getMessage().contains("Error connecting to gatt server");
+                        if (error.getMessage().contains("status: 257")) {
+                            needs_to_reboot = true;
+                        }
+                        if (scanCount >= 3) {
+                            needs_to_reboot = true;
+                        }
+                        broadcastStatus();
+                        service.writeSensorLog("Try to connect", ForegroundService._info, devicename);
+                        board.connect();
+                    } else {
+                        searchTM = new Timer();
+                        connectionFailureCount = 0;
+                        searchTM.schedule(new TimerTask() {
+                            @Override
+                            public void run() {
+                                Set<String> nearMW = service.scanBle(8000);
+                                if (nearMW.contains(service.getSensors(0))) {
+                                    away = false;
+                                    scanCount += 1;
+                                    board.connect();
+                                } else {
+                                    away = true;
+                                    sensor_status = AWAY;
+                                    broadcastStatus();
+                                }
+                            }
+                        }, 0, 120000);
+                    }
                 }
             }
         });
