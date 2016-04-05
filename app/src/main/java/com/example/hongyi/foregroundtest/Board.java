@@ -4,6 +4,7 @@ import android.content.Intent;
 import android.util.Log;
 
 import com.mbientlab.metawear.MetaWearBoard;
+import com.mbientlab.metawear.data.CartesianFloat;
 import com.mbientlab.metawear.module.Bmi160Accelerometer;
 
 import org.json.JSONArray;
@@ -82,6 +83,30 @@ public class Board {
             }
         }
         return filteredCache;
+    }
+
+    //generate timestamps
+    public ArrayList<String> getFilteredDataCache (ArrayList<Datapoint> data_list) {
+        ArrayList<String> temp = new ArrayList<>();
+        ArrayList<String> dataCache;
+//        int count = data_list.size();
+//        double record_ts = last_timestamp / 1000.0 - (count - 1) * 0.64;
+        for (Datapoint dp: data_list) {
+            CartesianFloat result = dp.data;
+            float x = result.x();
+            int x_int = (int) (x * 1000);
+            float y = result.y();
+            int y_int = (int) (y * 1000);
+            float z = result.z();
+            int z_int = (int) (z * 1000);
+            double record_ts = dp.timestamp;
+            temp.add(String.format("%.3f", record_ts) + "," + String.valueOf(x_int) +
+                    "," + String.valueOf(y_int) + "," + String.valueOf(z_int));
+//            record_ts += 0.64;
+        }
+        dataCache = filtering(temp, 32, 3);
+
+        return dataCache;
     }
 
     public ArrayList<String> filtering(ArrayList<String> dataCache, int thres, int interval) {
