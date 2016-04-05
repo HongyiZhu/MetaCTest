@@ -12,11 +12,11 @@ import com.mbientlab.metawear.data.CartesianFloat;
 import com.mbientlab.metawear.module.Bmi160Accelerometer;
 import com.mbientlab.metawear.module.Logging;
 import com.mbientlab.metawear.module.MultiChannelTemperature;
+import com.mbientlab.metawear.module.Settings;
 
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
-import java.util.PriorityQueue;
 import java.util.TimerTask;
 
 /**
@@ -27,7 +27,7 @@ public class ObjectBoard extends Board{
     public String devicename;
     private final String SENSOR_DATA_LOG;
     private int first = 0;
-    private List<CartesianFloat> datalist = null;
+    private List<Datapoint> datalist = null;
     private int routeID = 0;
     boolean configured = false;
     public long connectionAttemptTS;
@@ -45,7 +45,9 @@ public class ObjectBoard extends Board{
     private final RouteManager.MessageHandler loggingMessageHandler = new RouteManager.MessageHandler() {
         @Override
         public void process(Message message) {
-            datalist.add(message.getData(CartesianFloat.class));
+            CartesianFloat data = message.getData(CartesianFloat.class);
+            double time = message.getTimestamp().getTimeInMillis() / 1000.0;
+            datalist.add(new Datapoint(data, time));
         }
     };
 
@@ -60,47 +62,25 @@ public class ObjectBoard extends Board{
         }
     };
 
-    //generate timestamps
-    private ArrayList<String> getFilteredDataCache (ArrayList<CartesianFloat> data_list, long last_timestamp) {
-        ArrayList<String> temp = new ArrayList<>();
-        ArrayList<String> dataCache;
-        int count = data_list.size();
-        double record_ts = last_timestamp / 1000.0 - (count - 1) * 0.64;
-        for (CartesianFloat result: data_list) {
-            float x = result.x();
-            int x_int = (int) (x * 1000);
-            float y = result.y();
-            int y_int = (int) (y * 1000);
-            float z = result.z();
-            int z_int = (int) (z * 1000);
-            temp.add(String.format("%.3f", record_ts) + "," + String.valueOf(x_int) +
-                    "," + String.valueOf(y_int) + "," + String.valueOf(z_int));
-            record_ts += 0.64;
-        }
-        dataCache = filtering(temp, 32, 3);
-
-        return dataCache;
-    }
-
-    private ArrayList<String> getFilteredDataCache (ArrayList<CartesianFloat> data_list, long last_timestamp, int size) {
-        ArrayList<String> temp = new ArrayList<>();
-        ArrayList<String> dataCache;
-        double record_ts = last_timestamp / 1000.0 - (size - 1) * 0.64;
-        for (CartesianFloat result: data_list) {
-            float x = result.x();
-            int x_int = (int) (x * 1000);
-            float y = result.y();
-            int y_int = (int) (y * 1000);
-            float z = result.z();
-            int z_int = (int) (z * 1000);
-            temp.add(String.format("%.3f", record_ts) + "," + String.valueOf(x_int) +
-                    "," + String.valueOf(y_int) + "," + String.valueOf(z_int));
-            record_ts += 0.64;
-        }
-        dataCache = filtering(temp, 32, 3);
-
-        return dataCache;
-    }
+//    private ArrayList<String> getFilteredDataCache (ArrayList<CartesianFloat> data_list, long last_timestamp, int size) {
+//        ArrayList<String> temp = new ArrayList<>();
+//        ArrayList<String> dataCache;
+//        double record_ts = last_timestamp / 1000.0 - (size - 1) * 0.64;
+//        for (CartesianFloat result: data_list) {
+//            float x = result.x();
+//            int x_int = (int) (x * 1000);
+//            float y = result.y();
+//            int y_int = (int) (y * 1000);
+//            float z = result.z();
+//            int z_int = (int) (z * 1000);
+//            temp.add(String.format("%.3f", record_ts) + "," + String.valueOf(x_int) +
+//                    "," + String.valueOf(y_int) + "," + String.valueOf(z_int));
+//            record_ts += 0.64;
+//        }
+//        dataCache = filtering(temp, 32, 3);
+//
+//        return dataCache;
+//    }
 
     public void destroy() {
         try {
@@ -159,6 +139,17 @@ public class ObjectBoard extends Board{
         this.needs_to_reboot = false;
         this.gatt_error = false;
 
+//        // set board connection configuration
+//        try {
+//            board.getModule(Settings.class)
+//                    .configureConnectionParameters()
+//                    .setMaxConnectionInterval(100.f)
+//                    .setSlaveLatency((short)20)
+//                    .commit();
+//        } catch (UnsupportedModuleException e) {
+//            e.printStackTrace();
+//        }
+
         this.board.setConnectionStateHandler(new MyMetaWearBoardConnectionStateHandler(service) {
             @Override
             public void connected() {
@@ -168,6 +159,16 @@ public class ObjectBoard extends Board{
                 if (first == 0) {
                     first = 1;
                     board.removeRoutes();
+                    // set board connection configure
+                    try {
+                        board.getModule(Settings.class)
+                                .configureConnectionParameters()
+                                .setMaxConnectionInterval(100.f)
+                                .setSlaveLatency((short) 20)
+                                .commit();
+                    } catch (UnsupportedModuleException e) {
+                        e.printStackTrace();
+                    }
                     try {
                         Logging logger = board.getModule(Logging.class);
                         logger.stopLogging();
@@ -214,8 +215,9 @@ public class ObjectBoard extends Board{
                                                 infoTS = timestamp;
                                                 double ts_in_sec = timestamp / 1000.0;
                                                 String jsonstr = getJSON(devicename, String.format("%.3f", ts_in_sec), String.format("%.3f", message.getData(Float.class)));
-                                                postTempAsync task = new postTempAsync(service);
-                                                task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, jsonstr);
+                                                service.resendTempQueue.offer(jsonstr);
+//                                                postTempAsync task = new postTempAsync(service);
+//                                                task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, jsonstr);
 //                                                    task.execute(jsonstr);
                                                 temperature =  String.format("%.3f", message.getData(Float.class));
                                                 Log.i(devicename, jsonstr);
@@ -233,8 +235,9 @@ public class ObjectBoard extends Board{
                                     battery = result.toString();
                                     Log.i("battery", battery);
                                     String jsonstr = getJSON(devicename, String.format("%.3f", System.currentTimeMillis() / 1000.0), Integer.valueOf(battery));
-                                    postBatteryAsync task = new postBatteryAsync(service);
-                                    task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, jsonstr);
+                                    service.resendBatteryQueue.offer(jsonstr);
+//                                    postBatteryAsync task = new postBatteryAsync(service);
+//                                    task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, jsonstr);
                                     if (Integer.valueOf(battery) <= low_battery_thres) {
                                         sensor_status = OUT_OF_BATTERY;
                                         first = -2;
@@ -286,8 +289,9 @@ public class ObjectBoard extends Board{
                                         battery = result.toString();
                                         Log.i("battery_" + devicename, battery);
                                         String jsonstr = getJSON(devicename,String.format("%.3f", System.currentTimeMillis()/1000.0), Integer.valueOf(battery));
-                                        postBatteryAsync task = new postBatteryAsync(service);
-                                        task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, jsonstr);
+                                        service.resendBatteryQueue.offer(jsonstr);
+//                                        postBatteryAsync task = new postBatteryAsync(service);
+//                                        task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, jsonstr);
                                         if (Integer.valueOf(battery) <= low_battery_thres) {
                                             sensor_status = OUT_OF_BATTERY;
                                             first = -2;
@@ -311,7 +315,7 @@ public class ObjectBoard extends Board{
                                     service.writeSensorLog("Download timed out", ForegroundService._info, devicename);
                                     int totalApprox = (int) (total / (((int) (total / 375.0)) * 1.0));
                                     if (!datalist.isEmpty()) {
-                                        ArrayList<String> data = getFilteredDataCache((ArrayList<CartesianFloat>) datalist, dl_TS, totalApprox);
+                                        ArrayList<String> data = getFilteredDataCache((ArrayList<Datapoint>) datalist);
                                         if (data.size() > 0) {
                                             ArrayList<String> data_array = getJSONList(devicename, data);
                                             for (String s : data_array) {
@@ -370,7 +374,7 @@ public class ObjectBoard extends Board{
                                     }
                                     //process listed data
                                     // send to server
-                                    ArrayList<String> data = getFilteredDataCache((ArrayList<CartesianFloat>)datalist, dl_TS);
+                                    ArrayList<String> data = getFilteredDataCache((ArrayList<Datapoint>)datalist);
                                     if (data.size() > 0) {
                                         ArrayList<String> data_array = getJSONList(devicename, data);
                                         for (String s : data_array) {

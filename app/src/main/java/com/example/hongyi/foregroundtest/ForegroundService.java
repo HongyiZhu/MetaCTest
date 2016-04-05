@@ -30,6 +30,8 @@ import android.util.Log;
 
 import com.mbientlab.metawear.MetaWearBleService;
 import com.mbientlab.metawear.MetaWearBoard;
+import com.mbientlab.metawear.UnsupportedModuleException;
+import com.mbientlab.metawear.module.Settings;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -79,6 +81,7 @@ public class ForegroundService extends Service implements ServiceConnection{
     private ArrayList<ScanFilter> api21ScanFilters;
     private final static UUID[] serviceUuids;
     private static ExecutorService dataPool;
+    private static ExecutorService heartbeatPool;
     public boolean keepAlive = false;
     private Timer restartTM;
     private Set<String> nearByDevices;
@@ -96,6 +99,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                 MetaWearBoard.METABOOT_SERVICE_UUID
         };
         dataPool = Executors.newCachedThreadPool();
+        heartbeatPool = Executors.newCachedThreadPool();
     }
 
     public static String getSensors(int i) {
@@ -453,12 +457,12 @@ public class ForegroundService extends Service implements ServiceConnection{
                 if (!resendBatteryQueue.isEmpty()) {
                     String data = resendBatteryQueue.poll();
                     postBatteryAsync task = new postBatteryAsync(service);
-                    task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, data);
+                    task.executeOnExecutor(heartbeatPool, data);
                 }
                 if (!resendTempQueue.isEmpty()) {
                     String data = resendTempQueue.poll();
                     postTempAsync task = new postTempAsync(service);
-                    task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, data);
+                    task.executeOnExecutor(heartbeatPool, data);
                 }
             }
         }, 0, 500);

@@ -12,7 +12,9 @@ import com.mbientlab.metawear.data.CartesianFloat;
 import com.mbientlab.metawear.module.Bmi160Accelerometer;
 import com.mbientlab.metawear.module.Logging;
 import com.mbientlab.metawear.module.MultiChannelTemperature;
+import com.mbientlab.metawear.module.Settings;
 
+import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
@@ -30,7 +32,7 @@ public class BodyLogBoard extends Board{
     public String devicename;
     private final String SENSOR_DATA_LOG;
     public int first = 0;
-    private List<CartesianFloat> datalist = null;
+    private List<Datapoint> datalist = null;
     private int routeID = 0;
     boolean configured = false;
     public long connectionAttemptTS;
@@ -51,7 +53,10 @@ public class BodyLogBoard extends Board{
     private final RouteManager.MessageHandler loggingMessageHandler = new RouteManager.MessageHandler() {
         @Override
         public void process(Message message) {
-            datalist.add(message.getData(CartesianFloat.class));
+            // Todo: get timestamp
+            double time = message.getTimestamp().getTimeInMillis() / 1000.0;
+            CartesianFloat data = message.getData(CartesianFloat.class);
+            datalist.add(new Datapoint(data, time));
         }
     };
 
@@ -65,48 +70,6 @@ public class BodyLogBoard extends Board{
             result.setLogMessageHandler(SENSOR_DATA_LOG, loggingMessageHandler);
         }
     };
-
-    //generate timestamps
-    private ArrayList<String> getFilteredDataCache (ArrayList<CartesianFloat> data_list, long last_timestamp) {
-        ArrayList<String> temp = new ArrayList<>();
-        ArrayList<String> dataCache;
-        int count = data_list.size();
-        double record_ts = last_timestamp / 1000.0 - (count - 1) * 0.64;
-        for (CartesianFloat result: data_list) {
-            float x = result.x();
-            int x_int = (int) (x * 1000);
-            float y = result.y();
-            int y_int = (int) (y * 1000);
-            float z = result.z();
-            int z_int = (int) (z * 1000);
-            temp.add(String.format("%.3f", record_ts) + "," + String.valueOf(x_int) +
-                    "," + String.valueOf(y_int) + "," + String.valueOf(z_int));
-            record_ts += 0.64;
-        }
-        dataCache = filtering(temp, 32, 3);
-
-        return dataCache;
-    }
-
-    private ArrayList<String> getFilteredDataCache (ArrayList<CartesianFloat> data_list, long last_timestamp, int size) {
-        ArrayList<String> temp = new ArrayList<>();
-        ArrayList<String> dataCache;
-        double record_ts = last_timestamp / 1000.0 - (size - 1) * 0.08;
-        for (CartesianFloat result: data_list) {
-            float x = result.x();
-            int x_int = (int) (x * 1000);
-            float y = result.y();
-            int y_int = (int) (y * 1000);
-            float z = result.z();
-            int z_int = (int) (z * 1000);
-            temp.add(String.format("%.3f", record_ts) + "," + String.valueOf(x_int) +
-                    "," + String.valueOf(y_int) + "," + String.valueOf(z_int));
-            record_ts += 0.08;
-        }
-        dataCache = filtering(temp, 32, 3);
-
-        return dataCache;
-    }
 
     public void destroy() {
         try {
@@ -181,6 +144,17 @@ public class BodyLogBoard extends Board{
                 }
                 if (first == 0) {
                     first = 1;
+                    board.removeRoutes();
+                    // set board connection configure
+                    try {
+                        board.getModule(Settings.class)
+                                .configureConnectionParameters()
+                                .setMaxConnectionInterval(100.f)
+                                .setSlaveLatency((short) 20)
+                                .commit();
+                    } catch (UnsupportedModuleException e) {
+                        e.printStackTrace();
+                    }
                     try {
                         Logging logger = board.getModule(Logging.class);
                         logger.stopLogging();
@@ -227,8 +201,9 @@ public class BodyLogBoard extends Board{
                                                 infoTS = timestamp;
                                                 double ts_in_sec = timestamp / 1000.0;
                                                 String jsonstr = getJSON(devicename, String.format("%.3f", ts_in_sec), String.format("%.3f", message.getData(Float.class)));
-                                                postTempAsync task = new postTempAsync(service);
-                                                task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, jsonstr);
+                                                service.resendTempQueue.offer(jsonstr);
+//                                                postTempAsync task = new postTempAsync(service);
+//                                                task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, jsonstr);
 //                                                    task.execute(jsonstr);
                                                 temperature =  String.format("%.3f", message.getData(Float.class));
                                                 Log.i(devicename, jsonstr);
@@ -246,8 +221,9 @@ public class BodyLogBoard extends Board{
                                     battery = result.toString();
                                     Log.i("battery", battery);
                                     String jsonstr = getJSON(devicename, String.format("%.3f", System.currentTimeMillis() / 1000.0), Integer.valueOf(battery));
-                                    postBatteryAsync task = new postBatteryAsync(service);
-                                    task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, jsonstr);
+                                    service.resendBatteryQueue.offer(jsonstr);
+//                                    postBatteryAsync task = new postBatteryAsync(service);
+//                                    task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, jsonstr);
                                     if (Integer.valueOf(battery) <= low_battery_thres) {
                                         sensor_status = OUT_OF_BATTERY;
                                         first = -2;
@@ -299,8 +275,9 @@ public class BodyLogBoard extends Board{
                                         battery = result.toString();
                                         Log.i("battery_" + devicename, battery);
                                         String jsonstr = getJSON(devicename,String.format("%.3f", System.currentTimeMillis()/1000.0), Integer.valueOf(battery));
-                                        postBatteryAsync task = new postBatteryAsync(service);
-                                        task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, jsonstr);
+                                        service.resendBatteryQueue.offer(jsonstr);
+//                                        postBatteryAsync task = new postBatteryAsync(service);
+//                                        task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, jsonstr);
                                         if (Integer.valueOf(battery) <= low_battery_thres) {
                                             sensor_status = OUT_OF_BATTERY;
                                             first = -2;
@@ -324,9 +301,9 @@ public class BodyLogBoard extends Board{
                             public void run() {
                                 if (sensor_status.equals(CONNECTED)) {
                                     service.writeSensorLog("Download timed out", ForegroundService._info, devicename);
-                                    int totalApprox = (int) (total / (((int) (total / 375.0)) * 1.0));
+//                                    int totalApprox = (int) (total / (((int) (total / 375.0)) * 1.0));
                                     if (!datalist.isEmpty()) {
-                                        ArrayList<String> data = getFilteredDataCache((ArrayList<CartesianFloat>) datalist, dl_TS, totalApprox);
+                                        ArrayList<String> data = getFilteredDataCache((ArrayList<Datapoint>) datalist);
                                         if (data.size() > 0) {
                                             ArrayList<String> data_array = getJSONList(devicename, data);
                                             for (String s : data_array) {
@@ -390,7 +367,7 @@ public class BodyLogBoard extends Board{
                                         }
                                         //process listed data
                                         // send to server
-                                        ArrayList<String> data = getFilteredDataCache((ArrayList<CartesianFloat>) datalist, dl_TS);
+                                        ArrayList<String> data = getFilteredDataCache((ArrayList<Datapoint>) datalist);
                                         if (data.size() > 0) {
                                             ArrayList<String> data_array = getJSONList(devicename, data);
                                             for (String s : data_array) {
