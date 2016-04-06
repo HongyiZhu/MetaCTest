@@ -88,7 +88,7 @@ public class Board {
     //generate timestamps
     public ArrayList<String> getFilteredDataCache (ArrayList<Datapoint> data_list) {
         ArrayList<String> temp = new ArrayList<>();
-        ArrayList<String> dataCache;
+//        ArrayList<String> dataCache;
 //        int count = data_list.size();
 //        double record_ts = last_timestamp / 1000.0 - (count - 1) * 0.64;
         for (Datapoint dp: data_list) {
@@ -104,9 +104,9 @@ public class Board {
                     "," + String.valueOf(y_int) + "," + String.valueOf(z_int));
 //            record_ts += 0.64;
         }
-        dataCache = filtering(temp, 32, 3);
+//        dataCache = filtering(temp, 32, 3);
 
-        return dataCache;
+        return temp;
     }
 
     public ArrayList<String> filtering(ArrayList<String> dataCache, int thres, int interval) {

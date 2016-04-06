@@ -4,12 +4,14 @@ import android.os.AsyncTask;
 import android.util.Log;
 
 import com.mbientlab.metawear.AsyncOperation;
+import com.mbientlab.metawear.DataSignal;
 import com.mbientlab.metawear.Message;
 import com.mbientlab.metawear.MetaWearBoard;
 import com.mbientlab.metawear.RouteManager;
 import com.mbientlab.metawear.UnsupportedModuleException;
 import com.mbientlab.metawear.data.CartesianFloat;
 import com.mbientlab.metawear.module.Bmi160Accelerometer;
+import com.mbientlab.metawear.module.DataProcessor;
 import com.mbientlab.metawear.module.Logging;
 import com.mbientlab.metawear.module.MultiChannelTemperature;
 import com.mbientlab.metawear.module.Settings;
@@ -17,6 +19,7 @@ import com.mbientlab.metawear.module.Settings;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
+import java.util.Map;
 import java.util.TimerTask;
 
 /**
@@ -62,26 +65,6 @@ public class ObjectBoard extends Board{
         }
     };
 
-//    private ArrayList<String> getFilteredDataCache (ArrayList<CartesianFloat> data_list, long last_timestamp, int size) {
-//        ArrayList<String> temp = new ArrayList<>();
-//        ArrayList<String> dataCache;
-//        double record_ts = last_timestamp / 1000.0 - (size - 1) * 0.64;
-//        for (CartesianFloat result: data_list) {
-//            float x = result.x();
-//            int x_int = (int) (x * 1000);
-//            float y = result.y();
-//            int y_int = (int) (y * 1000);
-//            float z = result.z();
-//            int z_int = (int) (z * 1000);
-//            temp.add(String.format("%.3f", record_ts) + "," + String.valueOf(x_int) +
-//                    "," + String.valueOf(y_int) + "," + String.valueOf(z_int));
-//            record_ts += 0.64;
-//        }
-//        dataCache = filtering(temp, 32, 3);
-//
-//        return dataCache;
-//    }
-
     public void destroy() {
         try {
             Logging logger = board.getModule(Logging.class);
@@ -98,35 +81,6 @@ public class ObjectBoard extends Board{
         }
     }
 
-    private ArrayList<Object> trim_final_dataset (ArrayList<CartesianFloat> datalist, int expected_download_size, int period_expected) {
-        ArrayList<Object> rt_set = new ArrayList<>();
-        if (period_expected >= expected_download_size) {
-            rt_set.add(expected_download_size);
-            rt_set.add(datalist);
-        } else {
-            int trim_num = expected_download_size - period_expected;
-            if (trim_num <= 20) {
-                rt_set.add(expected_download_size);
-                rt_set.add(datalist);
-            } else {
-                ArrayList<CartesianFloat> templist = new ArrayList<>(datalist);
-                for (int i = 0; i < trim_num; i++){
-                    if (templist.size() != 0) {
-                        templist.remove(0);
-                    }
-                }
-                if (templist.size() == 0) {
-                    rt_set.add(0);
-                } else {
-                    rt_set.add(period_expected);
-                }
-                rt_set.add(templist);
-            }
-        }
-
-        return rt_set;
-    }
-
     public ObjectBoard(ForegroundService service, MetaWearBoard mxBoard, final String MAC, float freq) {
         super(service);
         this.board = mxBoard;
@@ -138,17 +92,6 @@ public class ObjectBoard extends Board{
         this.datalist = new ArrayList<>();
         this.needs_to_reboot = false;
         this.gatt_error = false;
-
-//        // set board connection configuration
-//        try {
-//            board.getModule(Settings.class)
-//                    .configureConnectionParameters()
-//                    .setMaxConnectionInterval(100.f)
-//                    .setSlaveLatency((short)20)
-//                    .commit();
-//        } catch (UnsupportedModuleException e) {
-//            e.printStackTrace();
-//        }
 
         this.board.setConnectionStateHandler(new MyMetaWearBoardConnectionStateHandler(service) {
             @Override
@@ -194,8 +137,33 @@ public class ObjectBoard extends Board{
                                 .enableUndersampling((byte) 4)
                                 .commit();
                         accel_module.routeData().fromAxes().log(SENSOR_DATA_LOG).commit().onComplete(accelHandler);
-                        accel_module.enableAxisSampling();
-                        accel_module.startLowPower();
+                        com.mbientlab.metawear.module.Timer timerModule = board.getModule(com.mbientlab.metawear.module.Timer.class);
+
+                        timerModule.scheduleTask(new com.mbientlab.metawear.module.Timer.Task() {
+                            @Override
+                            public void commands() {
+                                accel_module.disableAxisSampling();
+                            }
+                        }, 3000, true).onComplete(new AsyncOperation.CompletionHandler<com.mbientlab.metawear.module.Timer.Controller>() {
+                            @Override
+                            public void success(final com.mbientlab.metawear.module.Timer.Controller result) {
+                                accel_module.routeData().fromMotion().monitor(new DataSignal.ActivityHandler() {
+                                    @Override
+                                    public void onSignalActive(Map<String, DataProcessor> map, DataSignal.DataToken dataToken) {
+                                        result.start();
+                                        accel_module.enableAxisSampling();
+                                    }
+                                }).commit().onComplete(new AsyncOperation.CompletionHandler<RouteManager>() {
+                                    @Override
+                                    public void success(RouteManager result) {
+                                        accel_module.configureAnyMotionDetection().setThreshold(0.032f).commit();
+                                        accel_module.enableMotionDetection(Bmi160Accelerometer.MotionType.ANY_MOTION);
+                                        accel_module.startLowPower();
+                                    }
+                                });
+                            }
+                        });
+
                         lastDownloadTS = System.currentTimeMillis();
                         // Get Temperature and Battery
                         MultiChannelTemperature mcTempModule;
@@ -330,25 +298,29 @@ public class ObjectBoard extends Board{
                                             broadcastStatus();
                                         }
                                     } else {
-                                        service.writeSensorLog("Activity not logged, Reset", ForegroundService._error, devicename);
-                                        try {
-                                            accel_module = board.getModule(Bmi160Accelerometer.class);
-                                            accel_module.stop();
-                                            accel_module.disableAxisSampling();
-                                            Logging logger = board.getModule(Logging.class);
-                                            logger.stopLogging();
-                                            logger.clearEntries();
-                                        } catch (UnsupportedModuleException e) {
-                                            e.printStackTrace();
-                                        }
-                                        board.removeRoutes();
+                                        datalist.clear();
                                         board.disconnect();
-                                        if (!sensor_status.equals(OUT_OF_BATTERY)) {
-                                            sensor_status = INITIATED;
-                                            lastDownloadTS = dl_TS;
-                                            broadcastStatus();
-                                            first = 1;
-                                        }
+                                        sensor_status = DISCONNECTED_OBJ;
+                                        broadcastStatus();
+//                                        service.writeSensorLog("Activity not logged, Reset", ForegroundService._error, devicename);
+//                                        try {
+//                                            accel_module = board.getModule(Bmi160Accelerometer.class);
+//                                            accel_module.stop();
+//                                            accel_module.disableAxisSampling();
+//                                            Logging logger = board.getModule(Logging.class);
+//                                            logger.stopLogging();
+//                                            logger.clearEntries();
+//                                        } catch (UnsupportedModuleException e) {
+//                                            e.printStackTrace();
+//                                        }
+//                                        board.removeRoutes();
+//                                        board.disconnect();
+//                                        if (!sensor_status.equals(OUT_OF_BATTERY)) {
+//                                            sensor_status = INITIATED;
+//                                            lastDownloadTS = dl_TS;
+//                                            broadcastStatus();
+//                                            first = 1;
+//                                        }
                                     }
                                 }
                             }
@@ -359,13 +331,13 @@ public class ObjectBoard extends Board{
                             @Override
                             public void onProgressUpdate(int nEntriesLeft, int totalEntries) {
                                 Log.i("data", String.format("Progress: %d/%d/%d", datalist.size(), totalEntries - nEntriesLeft, totalEntries));
-                                int expected_N = (int) (totalEntries * datalist.size() / ((totalEntries - nEntriesLeft) * 1.0));
+//                                int expected_N = (int) (totalEntries * datalist.size() / ((totalEntries - nEntriesLeft) * 1.0));
                                 service.writeSensorLog(String.format("Download Progress: %d/%d", totalEntries - nEntriesLeft, totalEntries), ForegroundService._info, devicename);
                                 total = totalEntries;
                                 if (nEntriesLeft == 0) {
                                     Log.i("data", "Download Completed");
                                     lastDownloadTS = dl_TS;
-                                    expected_N = datalist.size();
+//                                    expected_N = datalist.size();
                                     service.writeSensorLog("Download Completed", ForegroundService._success, devicename);
                                     Log.i("data", "Generated " + datalist.size() + " data points");
                                     service.writeSensorLog("Generated " + datalist.size() + " data points", ForegroundService._success, devicename);
@@ -386,23 +358,23 @@ public class ObjectBoard extends Board{
                                         sensor_status = DOWNLOAD_COMPLETED;
                                     }
 
-                                    if (total < 300 && !sensor_status.equals(OUT_OF_BATTERY)) {
-                                        service.writeSensorLog("Available records: " + total + " Remaining space: " + remaining_space, ForegroundService._info, devicename);
-                                        service.writeSensorLog("No enough space on sensor, Reset", ForegroundService._error, devicename);
-                                        board.removeRoutes();
-                                        try {
-                                            Logging logger = board.getModule(Logging.class);
-                                            logger.stopLogging();
-                                            accel_module = board.getModule(Bmi160Accelerometer.class);
-                                            accel_module.stop();
-                                            accel_module.disableAxisSampling();
-                                            logger.clearEntries();
-                                        } catch (UnsupportedModuleException e) {
-                                            e.printStackTrace();
-                                        }
-                                        sensor_status = INITIATED;
-                                        first = 1;
-                                    }
+//                                    if (total < 300 && !sensor_status.equals(OUT_OF_BATTERY)) {
+//                                        service.writeSensorLog("Available records: " + total + " Remaining space: " + remaining_space, ForegroundService._info, devicename);
+//                                        service.writeSensorLog("No enough space on sensor, Reset", ForegroundService._error, devicename);
+//                                        board.removeRoutes();
+//                                        try {
+//                                            Logging logger = board.getModule(Logging.class);
+//                                            logger.stopLogging();
+//                                            accel_module = board.getModule(Bmi160Accelerometer.class);
+//                                            accel_module.stop();
+//                                            accel_module.disableAxisSampling();
+//                                            logger.clearEntries();
+//                                        } catch (UnsupportedModuleException e) {
+//                                            e.printStackTrace();
+//                                        }
+//                                        sensor_status = INITIATED;
+//                                        first = 1;
+//                                    }
 
                                     total = 0;
 

@@ -435,10 +435,16 @@ public class ForegroundService extends Service implements ServiceConnection{
             flag = true;
         }
 
+        boolean gatt_restart = true;
+        for (int i = 0; i < SENSOR_MAC.size(); i++){
+            gatt_restart = boards.get(i).gatt_error && gatt_restart;
+        }
+
         for (int i = 0; i < SENSOR_MAC.size();i++){
             flag = boards.get(i).needs_to_reboot || flag;
         }
-        flag = flag || wifiReboot;
+
+        flag = flag || wifiReboot || gatt_restart;
 
         return flag;
     }
