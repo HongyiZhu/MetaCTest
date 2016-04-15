@@ -1,12 +1,12 @@
 package com.example.hongyi.foregroundtest;
 
 /**
- * Created by Hongyi on 3/16/2016.
+ * Created by Hongyi on 4/14/2016.
  */
-public class postTempAsync extends MyAsyncTask {
+public class postHeartbeatAsync extends MyAsyncTask {
 
-    postTempAsync(ForegroundService service) {
-        super(service, "/temperature");
+    postHeartbeatAsync(ForegroundService service) {
+        super(service, "/heartbeat");
     }
 
     @Override
@@ -14,4 +14,3 @@ public class postTempAsync extends MyAsyncTask {
         return super.doInBackground(params);
     }
 }
-

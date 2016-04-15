@@ -325,7 +325,7 @@ public class ObjectBoard extends Board{
                                 }
                             }
                         };
-                        timer.schedule(interrupt, 30000);
+                        timer.schedule(interrupt, Constants.CONFIG.DOWNLOAD_TIMEOUT);
                         final long remaining_space = logger.getLogCapacity();
                         logger.downloadLog(0.1f, new Logging.DownloadHandler() {
                             @Override
@@ -409,7 +409,7 @@ public class ObjectBoard extends Board{
             @Override
             public void disconnected() {
                 if (first >= 0) {
-                    long interval = 240000 - (System.currentTimeMillis() - connectionAttemptTS) % 240000;
+                    long interval = Constants.CONFIG.ROTATION_MS - (System.currentTimeMillis() - connectionAttemptTS) % Constants.CONFIG.ROTATION_MS;
                     TimerTask reconnect = new TimerTask() {
                         @Override
                         synchronized public void run() {
@@ -458,7 +458,7 @@ public class ObjectBoard extends Board{
                         service.writeSensorLog("Reconnect attempt " + connectionFailureCount, ForegroundService._info, devicename);
                     } else {
                         connectionFailureCount = 0;
-                        long interval = 240000 - (System.currentTimeMillis() - connectionAttemptTS) % 240000;
+                        long interval = Constants.CONFIG.ROTATION_MS - (System.currentTimeMillis() - connectionAttemptTS) % Constants.CONFIG.ROTATION_MS;
                         timer.schedule(reconnect_long, interval);
                         service.writeSensorLog("Skip this round, schedule to reconnect in " + interval + " ms", ForegroundService._info, devicename);
                     }

@@ -64,6 +64,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RunnableFuture;
 
 public class ForegroundService extends Service implements ServiceConnection{
     public Set<String> sendJobSet;
@@ -86,6 +87,8 @@ public class ForegroundService extends Service implements ServiceConnection{
     private Timer restartTM;
     private Set<String> nearByDevices;
     public String send_url_base;
+    public boolean wifiReset_report = false;
+    private WifiRestarter wr;
     private boolean wifiReboot = false;
     private BluetoothAdapter.LeScanCallback deprecatedScanCallback= null;
     private ScanCallback api21ScallCallback= null;
@@ -272,6 +275,7 @@ public class ForegroundService extends Service implements ServiceConnection{
 //        Log.i("phoneID", phoneID);
 //        initParams();
         Log.i(LOG_TAG, "successfully on create");
+        wr = new WifiRestarter(this);
 
         return START_STICKY;
     }
@@ -572,6 +576,9 @@ public class ForegroundService extends Service implements ServiceConnection{
         TimerTask scanForRestart = new TimerTask() {
             @Override
             public void run() {
+                if (wifiReset_report) {
+                    wr.restartWifi();
+                }
                 btAdapter = ((BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE)).getAdapter();
                 if (!btAdapter.isEnabled()) {
                     btAdapter.enable();
@@ -611,7 +618,7 @@ public class ForegroundService extends Service implements ServiceConnection{
             }
         };
 
-        restartTM.schedule(scanForRestart, 600000, 240000);
+        restartTM.schedule(scanForRestart, 600000, Constants.CONFIG.ROTATION_MS);
     }
 
     @Override

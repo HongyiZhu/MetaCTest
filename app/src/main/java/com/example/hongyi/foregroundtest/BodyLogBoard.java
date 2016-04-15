@@ -90,35 +90,6 @@ public class BodyLogBoard extends Board{
         }
     }
 
-//    private ArrayList<Object> trim_final_dataset (ArrayList<CartesianFloat> datalist, int expected_download_size, int period_expected) {
-//        ArrayList<Object> rt_set = new ArrayList<>();
-//        if (period_expected >= expected_download_size) {
-//            rt_set.add(expected_download_size);
-//            rt_set.add(datalist);
-//        } else {
-//            int trim_num = expected_download_size - period_expected;
-//            if (trim_num <= 20) {
-//                rt_set.add(expected_download_size);
-//                rt_set.add(datalist);
-//            } else {
-//                ArrayList<CartesianFloat> templist = new ArrayList<>(datalist);
-//                for (int i = 0; i < trim_num; i++){
-//                    if (templist.size() != 0) {
-//                        templist.remove(0);
-//                    }
-//                }
-//                if (templist.size() == 0) {
-//                    rt_set.add(0);
-//                } else {
-//                    rt_set.add(period_expected);
-//                }
-//                rt_set.add(templist);
-//            }
-//        }
-//
-//        return rt_set;
-//    }
-
     public BodyLogBoard(ForegroundService service, MetaWearBoard mxBoard, final String MAC, float freq) {
         super(service);
         this.board = mxBoard;
@@ -211,10 +182,7 @@ public class BodyLogBoard extends Board{
                             }
                         });
 
-//                        accel_module.enableAxisSampling();
-//                        accel_module.startLowPower();
                         lastDownloadTS = System.currentTimeMillis();
-                        // Get Temperature and Battery
                         MultiChannelTemperature mcTempModule;
                         try {
                             mcTempModule = board.getModule(MultiChannelTemperature.class);
@@ -305,8 +273,6 @@ public class BodyLogBoard extends Board{
                                         Log.i("battery_" + devicename, battery);
                                         String jsonstr = getJSON(devicename,String.format("%.3f", System.currentTimeMillis()/1000.0), Integer.valueOf(battery));
                                         service.resendBatteryQueue.offer(jsonstr);
-//                                        postBatteryAsync task = new postBatteryAsync(service);
-//                                        task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, jsonstr);
                                         if (Integer.valueOf(battery) <= low_battery_thres) {
                                             sensor_status = OUT_OF_BATTERY;
                                             first = -2;
@@ -349,31 +315,11 @@ public class BodyLogBoard extends Board{
                                         board.disconnect();
                                         sensor_status = DISCONNECTED_OBJ;
                                         broadcastStatus();
-//                                        service.writeSensorLog("Activity not logged, Reset", ForegroundService._error, devicename);
-//                                        try {
-//                                            accel_module = board.getModule(Bmi160Accelerometer.class);
-//                                            accel_module.stop();
-//                                            accel_module.disableAxisSampling();
-//                                            Logging logger = board.getModule(Logging.class);
-//                                            logger.stopLogging();
-//                                            logger.clearEntries();
-//                                        } catch (UnsupportedModuleException e) {
-//                                            e.printStackTrace();
-//                                        }
-//                                        board.removeRoutes();
-//                                        board.disconnect();
-//                                        if (!sensor_status.equals(OUT_OF_BATTERY)) {
-//                                            sensor_status = INITIATED;
-//                                            first = 1;
-//                                            lastDownloadTS = dl_TS;
-//                                            broadcastStatus();
-//                                        }
                                     }
                                 }
                             }
                         };
-                        // 40s log downloading time
-                        timer.schedule(interrupt, 40000);
+                        timer.schedule(interrupt, Constants.CONFIG.DOWNLOAD_TIMEOUT);
 
 
                         final long remaining_space = logger.getLogCapacity();
