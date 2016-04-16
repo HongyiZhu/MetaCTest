@@ -72,6 +72,7 @@ public class ForegroundService extends Service implements ServiceConnection{
     public Queue<String> resendDataQueue = new ConcurrentLinkedQueue<>();
     public Queue<String> resendBatteryQueue = new ConcurrentLinkedQueue<>();
     public Queue<String> resendTempQueue = new ConcurrentLinkedQueue<>();
+    public Queue<String> resendHeartbeatQueue = new ConcurrentLinkedQueue<>();
     private File log_file;
     public static final String LOG_TAG = "ForegroundService", LOG_ERR = "http_err", _info = "INF";
     public static final String _success = "SUC", _error = "ERR";
@@ -472,6 +473,11 @@ public class ForegroundService extends Service implements ServiceConnection{
                 if (!resendTempQueue.isEmpty()) {
                     String data = resendTempQueue.poll();
                     postTempAsync task = new postTempAsync(service);
+                    task.executeOnExecutor(heartbeatPool, data);
+                }
+                if (!resendHeartbeatQueue.isEmpty()) {
+                    String data = resendHeartbeatQueue.poll();
+                    postHeartbeatAsync task = new postHeartbeatAsync(service);
                     task.executeOnExecutor(heartbeatPool, data);
                 }
             }

@@ -23,10 +23,12 @@ import java.net.URL;
 public class MyAsyncTask extends AsyncTask<String, Boolean, String> {
     ForegroundService service;
     String urlbase;
+    String request;
 
     MyAsyncTask(ForegroundService service, String request) {
         super();
         this.service = service;
+        this.request = request.split("/")[1];
         urlbase = service.send_url_base + request;
     }
 
@@ -60,7 +62,7 @@ public class MyAsyncTask extends AsyncTask<String, Boolean, String> {
                     writer.close();
                     os.flush();
                     os.close();
-                    service.writeSensorLog(params[0], ForegroundService._info, "Send Attempt");
+                    service.writeSensorLog(params.length>80?params[0].substring(0,80):params[0], ForegroundService._info, "Send Attempt");
 
                     int response = conn.getResponseCode();
                     if (response == HttpURLConnection.HTTP_OK) {
@@ -70,7 +72,7 @@ public class MyAsyncTask extends AsyncTask<String, Boolean, String> {
                         String line = br.readLine();
                         while(line!=null){
                             Log.i("Http_response", line);
-                            service.writeSensorLog("HTTP Response: " + line.trim(), ForegroundService._success, "Data");
+                            service.writeSensorLog("HTTP Response: " + line.trim(), ForegroundService._success, request);
                             line = br.readLine();
                         }
                         service.sendJobSet.remove(params[0]);

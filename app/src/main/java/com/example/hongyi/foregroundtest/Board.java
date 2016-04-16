@@ -25,9 +25,11 @@ public class Board {
     public String MAC_ADDRESS;
     public String temperature = "-99999";
     public String battery;
-    public int low_battery_thres = 3;
+    public int low_battery_thres = Constants.CONFIG.LOW_BATTERY_THRES;
     public boolean needs_to_reboot;
     public boolean gatt_error;
+    public long tempTS;
+    public long batteryTS;
     public final String CONNECTED = "Connected.\nStreaming Data",
             AWAY = "Sensor out of range",
             DISCONNECTED_BODY = "Lost connection.\nReconnecting",
@@ -41,6 +43,8 @@ public class Board {
             DOWNLOAD_COMPLETED = "Data download completed";
     public Board(ForegroundService service) {
         this.service = service;
+        tempTS = 0;
+        batteryTS = 0;
     }
 
     public ArrayList<String> filtering(ArrayList<String> previousCache, ArrayList<String> dataCache, int thres, int interval) {
@@ -167,6 +171,18 @@ public class Board {
             dataLists.add(jsonstring.toString());
         }
         return dataLists;
+    }
+
+    public String getJSON (String name, String ts) {
+        JSONObject jsonstring = new JSONObject();
+        try {
+            jsonstring.put("s", name);
+            jsonstring.put("t", Double.valueOf(ts));
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+
+        return jsonstring.toString();
     }
 
     public String getJSON (String name, String ts, String temperature) {

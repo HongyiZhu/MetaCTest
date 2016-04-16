@@ -10,6 +10,9 @@ public class Constants {
         long DOWNLOAD_TIMEOUT = 1000 * 30;
         long BATTERY_INTERVAL = 1000 * 60 * 60;
         long TEMPERATURE_INTERVAL = 1000 * 60 * 15;
+        long WAIT_AFTER_CONFIGURATION = 1000 * 5;
+        long WAIT_AFTER_DOWNLOAD = 1000 * 2;
+        int LOW_BATTERY_THRES = 3;
     }
 
     public interface ACTION {
