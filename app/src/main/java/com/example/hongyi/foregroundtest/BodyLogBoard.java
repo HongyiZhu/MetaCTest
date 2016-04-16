@@ -116,7 +116,7 @@ public class BodyLogBoard extends Board{
                     searchTM.purge();
                     searchTM = null;
                 }
-                service.resendHeartbeatQueue.offer(getJSON(devicename, String.format("%.3f", (double) (System.currentTimeMillis()/1000.0f))));
+                service.resendHeartbeatQueue.offer(getJSON(devicename, String.format("%.3f", System.currentTimeMillis() / 1000.0)));
                 if (first == 0) {
                     first = 1;
                     board.removeRoutes();

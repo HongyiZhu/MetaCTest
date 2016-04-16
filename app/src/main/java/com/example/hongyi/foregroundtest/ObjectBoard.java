@@ -98,7 +98,7 @@ public class ObjectBoard extends Board{
                 needs_to_reboot = false;
                 gatt_error = false;
                 connectionFailureCount = 0;
-                service.resendHeartbeatQueue.offer(getJSON(devicename, String.format("%.3f", (double) (System.currentTimeMillis()/1000.0f))));
+                service.resendHeartbeatQueue.offer(getJSON(devicename, String.format("%.3f", System.currentTimeMillis()/1000.0)));
                 if (first == 0) {
                     first = 1;
                     board.removeRoutes();
@@ -254,6 +254,7 @@ public class ObjectBoard extends Board{
                                     @Override
                                     public void success(Byte result) {
                                         // Send Battery Info
+                                        batteryTS = System.currentTimeMillis();
                                         battery = result.toString();
                                         Log.i("battery_" + devicename, battery);
                                         String jsonstr = getJSON(devicename, String.format("%.3f", System.currentTimeMillis() / 1000.0), Integer.valueOf(battery));
