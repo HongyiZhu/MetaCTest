@@ -98,6 +98,7 @@ public class ObjectBoard extends Board{
                 needs_to_reboot = false;
                 gatt_error = false;
                 connectionFailureCount = 0;
+                service.resendHeartbeatQueue.offer(getJSON(devicename, String.format("%.3f", (double) (System.currentTimeMillis()/1000.0f))));
                 if (first == 0) {
                     first = 1;
                     board.removeRoutes();
