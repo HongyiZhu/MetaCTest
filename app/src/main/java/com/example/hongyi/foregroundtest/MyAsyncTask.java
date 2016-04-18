@@ -88,7 +88,20 @@ public class MyAsyncTask extends AsyncTask<String, Boolean, String> {
                 Log.e(ForegroundService.LOG_ERR, "Illegal URL");
             } catch (IOException e) {
                 Log.e(ForegroundService.LOG_ERR, "Connection error " + e.getMessage() + " " + params[0]);
-                service.resendBatteryQueue.offer(params[0]);
+                switch (request) {
+                    case "heartbeat":
+                        service.resendHeartbeatQueue.offer(params[0]);
+                        break;
+                    case "logs":
+                        service.resendDataQueue.offer(params[0]);
+                        break;
+                    case "temperature":
+                        service.resendTempQueue.offer(params[0]);
+                        break;
+                    case "battery":
+                        service.resendBatteryQueue.offer(params[0]);
+                        break;
+                }
                 service.writeSensorLog("Connection error: " + e.getMessage() + " " + params[0], ForegroundService._error);
                 if (e.getMessage().contains("") && !service.wifiReset_report) {
                     service.wifiReset_report = true;
@@ -96,7 +109,20 @@ public class MyAsyncTask extends AsyncTask<String, Boolean, String> {
             }
         } else {
             Log.e(ForegroundService.LOG_ERR, "No active connection");
-            service.resendBatteryQueue.offer(params[0]);
+            switch (request) {
+                case "heartbeat":
+                    service.resendHeartbeatQueue.offer(params[0]);
+                    break;
+                case "logs":
+                    service.resendDataQueue.offer(params[0]);
+                    break;
+                case "temperature":
+                    service.resendTempQueue.offer(params[0]);
+                    break;
+                case "battery":
+                    service.resendBatteryQueue.offer(params[0]);
+                    break;
+            }
             service.writeSensorLog("No active connection, add to wait queue: " + params[0], ForegroundService._error);
         }
         return null;

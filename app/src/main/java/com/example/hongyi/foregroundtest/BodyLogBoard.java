@@ -137,7 +137,7 @@ public class BodyLogBoard extends Board{
                         accel_module.stop();
                         accel_module.disableAxisSampling();
                         logger.clearEntries();
-                        board.removeRoutes();
+//                        board.removeRoutes();
                     } catch (UnsupportedModuleException e) {
                         e.printStackTrace();
                     }
@@ -239,11 +239,11 @@ public class BodyLogBoard extends Board{
                         timer.schedule(new TimerTask() {
                             @Override
                             public void run() {
-                                try {
-                                    board.getModule(Logging.class).clearEntries();
-                                } catch (UnsupportedModuleException e) {
-                                    e.printStackTrace();
-                                }
+//                                try {
+//                                    board.getModule(Logging.class).clearEntries();
+//                                } catch (UnsupportedModuleException e) {
+//                                    e.printStackTrace();
+//                                }
                                 board.disconnect();
                                 if (!sensor_status.equals(OUT_OF_BATTERY)) {
                                     sensor_status = CONFIGURED;
@@ -417,7 +417,7 @@ public class BodyLogBoard extends Board{
                                     board.disconnect();
                                     broadcastStatus();
                                 }
-                            }, 5000);
+                            }, Constants.CONFIG.WAIT_AFTER_DOWNLOAD);
                         }
                     } catch (UnsupportedModuleException e) {
                         e.printStackTrace();
@@ -441,10 +441,10 @@ public class BodyLogBoard extends Board{
                         }
                     };
                     // 30s between Reset and Configuration
-                    timer.schedule(reconnect_after_reset, 30000);
-                    service.writeSensorLog("Disconnected from the sensor and scheduled next connection in " + 30000 + " ms", ForegroundService._info, devicename);
+                    timer.schedule(reconnect_after_reset, 60000);
+                    service.writeSensorLog("Disconnected from the sensor and scheduled next connection in " + 60000 + " ms", ForegroundService._info, devicename);
                 } else if (first == 2) {
-                    long interval = 60000 * minute_interval - (System.currentTimeMillis() - connectionAttemptTS) % (60000 * minute_interval);
+                    long interval = Constants.CONFIG.BODY_INTERVAL - (System.currentTimeMillis() - connectionAttemptTS) % (Constants.CONFIG.BODY_INTERVAL);
                     TimerTask reconnect = new TimerTask() {
                         @Override
                         synchronized public void run() {
@@ -500,7 +500,7 @@ public class BodyLogBoard extends Board{
                                     broadcastStatus();
                                 }
                             }
-                        }, 0, 120000);
+                        }, 0, Constants.CONFIG.SEARCH_BLE_DEVICE_INTERVAL);
                     }
                 }
             }
