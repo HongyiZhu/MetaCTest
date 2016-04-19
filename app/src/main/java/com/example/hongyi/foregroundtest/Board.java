@@ -20,6 +20,7 @@ public class Board {
     public ForegroundService service;
     public MetaWearBoard board;
     public Bmi160Accelerometer accel_module;
+    public com.mbientlab.metawear.module.Timer timerModule;
     public String sensor_status;
     public boolean ActiveDisconnect = false;
     public String MAC_ADDRESS;
