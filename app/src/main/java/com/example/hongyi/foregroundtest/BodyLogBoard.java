@@ -12,6 +12,7 @@ import com.mbientlab.metawear.UnsupportedModuleException;
 import com.mbientlab.metawear.data.CartesianFloat;
 import com.mbientlab.metawear.module.Bmi160Accelerometer;
 import com.mbientlab.metawear.module.DataProcessor;
+import com.mbientlab.metawear.module.Debug;
 import com.mbientlab.metawear.module.Logging;
 import com.mbientlab.metawear.module.MultiChannelTemperature;
 import com.mbientlab.metawear.module.Settings;
@@ -120,23 +121,19 @@ public class BodyLogBoard extends Board{
                 if (first == 0) {
                     first = 1;
                     board.removeRoutes();
-                    // set board connection configure
-                    try {
-                        board.getModule(Settings.class)
-                                .configureConnectionParameters()
-                                .setMaxConnectionInterval(100.f)
-                                .setSlaveLatency((short) 20)
-                                .commit();
-                    } catch (UnsupportedModuleException e) {
-                        e.printStackTrace();
-                    }
                     try {
                         Logging logger = board.getModule(Logging.class);
                         logger.stopLogging();
                         accel_module = board.getModule(Bmi160Accelerometer.class);
                         accel_module.stop();
                         accel_module.disableAxisSampling();
+                        timerModule = board.getModule(com.mbientlab.metawear.module.Timer.class);
+                        timerModule.removeTimers();
                         logger.clearEntries();
+                        Debug debug = board.getModule(Debug.class);
+                        debug.resetDevice();
+                        debug.disconnect();
+//                        debug.resetAfterGarbageCollect();
 //                        board.removeRoutes();
                     } catch (UnsupportedModuleException e) {
                         e.printStackTrace();
@@ -156,7 +153,7 @@ public class BodyLogBoard extends Board{
                                 .commit();
                         accel_module.routeData().fromAxes().log(SENSOR_DATA_LOG).commit().onComplete(accelHandler);
 
-                        com.mbientlab.metawear.module.Timer timerModule = board.getModule(com.mbientlab.metawear.module.Timer.class);
+                        timerModule = board.getModule(com.mbientlab.metawear.module.Timer.class);
 
                         timerModule.scheduleTask(new com.mbientlab.metawear.module.Timer.Task() {
                             @Override
@@ -175,11 +172,24 @@ public class BodyLogBoard extends Board{
                                 }).commit().onComplete(new AsyncOperation.CompletionHandler<RouteManager>() {
                                     @Override
                                     public void success(RouteManager result) {
+                                        Log.i("Anymotion Route", String.valueOf(result.id()));
                                         accel_module.configureAnyMotionDetection().setThreshold(0.032f).commit();
                                         accel_module.enableMotionDetection(Bmi160Accelerometer.MotionType.ANY_MOTION);
                                         accel_module.startLowPower();
                                     }
+
+                                    @Override
+                                    public void failure(Throwable error) {
+//                                        super.failure(error);
+                                        error.printStackTrace();
+                                    }
                                 });
+                            }
+
+                            @Override
+                            public void failure(Throwable error) {
+//                                super.failure(error);
+                                error.printStackTrace();
                             }
                         });
 
@@ -193,6 +203,7 @@ public class BodyLogBoard extends Board{
                                     .commit().onComplete(new AsyncOperation.CompletionHandler<RouteManager>() {
                                 @Override
                                 public void success(RouteManager result) {
+                                    Log.i("Temperature Route", String.valueOf(result.id()));
                                     result.subscribe("temp_"+devicename, new RouteManager.MessageHandler() {
                                         @Override
                                         public void process(Message message) {
@@ -213,7 +224,7 @@ public class BodyLogBoard extends Board{
                                     });
                                 }
                             });
-                            mcTempModule.readTemperature(tempSources.get(MultiChannelTemperature.MetaWearProChannel.ON_BOARD_THERMISTOR));
+//                            mcTempModule.readTemperature(tempSources.get(MultiChannelTemperature.MetaWearProChannel.ON_BOARD_THERMISTOR));
                             board.readBatteryLevel().onComplete(new AsyncOperation.CompletionHandler<Byte>() {
                                 @Override
                                 public void success(Byte result) {
@@ -230,6 +241,17 @@ public class BodyLogBoard extends Board{
                                     }
                                 }
                             });
+                        } catch (UnsupportedModuleException e) {
+                            e.printStackTrace();
+                        }
+
+                        // set board connection configure
+                        try {
+                            board.getModule(Settings.class)
+                                    .configureConnectionParameters()
+                                    .setMaxConnectionInterval(1000.f)
+                                    .setSlaveLatency((short) 20)
+                                    .commit();
                         } catch (UnsupportedModuleException e) {
                             e.printStackTrace();
                         }

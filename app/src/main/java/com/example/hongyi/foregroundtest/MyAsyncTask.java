@@ -62,7 +62,7 @@ public class MyAsyncTask extends AsyncTask<String, Boolean, String> {
                     writer.close();
                     os.flush();
                     os.close();
-                    service.writeSensorLog(params.length>80?params[0].substring(0,80):params[0], ForegroundService._info, "Send Attempt");
+                    service.writeSensorLog(params[0].length()>80?params[0].substring(0,80):params[0], ForegroundService._info, "Send Attempt");
 
                     int response = conn.getResponseCode();
                     if (response == HttpURLConnection.HTTP_OK) {
@@ -78,7 +78,20 @@ public class MyAsyncTask extends AsyncTask<String, Boolean, String> {
                         service.sendJobSet.remove(params[0]);
                     } else {
                         Log.e(ForegroundService.LOG_ERR, "Post error code: " + response + " " + params[0]);
-                        service.resendBatteryQueue.offer(params[0]);
+                        switch (request) {
+                            case "heartbeat":
+                                service.resendHeartbeatQueue.offer(params[0]);
+                                break;
+                            case "logs":
+                                service.resendDataQueue.offer(params[0]);
+                                break;
+                            case "temperature":
+                                service.resendTempQueue.offer(params[0]);
+                                break;
+                            case "battery":
+                                service.resendBatteryQueue.offer(params[0]);
+                                break;
+                        }
                         service.writeSensorLog("Post err code: " + response + " " + params[0], ForegroundService._error);
                     }
                 } finally {
