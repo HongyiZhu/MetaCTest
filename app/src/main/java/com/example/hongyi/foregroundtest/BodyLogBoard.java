@@ -57,7 +57,7 @@ public class BodyLogBoard extends Board{
     private final RouteManager.MessageHandler loggingMessageHandler = new RouteManager.MessageHandler() {
         @Override
         public void process(Message message) {
-            // Todo: get timestamp
+            //get timestamp
             double time = message.getTimestamp().getTimeInMillis() / 1000.0;
             CartesianFloat data = message.getData(CartesianFloat.class);
             datalist.add(new Datapoint(data, time));
@@ -72,6 +72,12 @@ public class BodyLogBoard extends Board{
             Log.i("info", String.format("RouteID: %d", routeID));
             service.writeSensorLog("Data routes established", ForegroundService._info, devicename);
             result.setLogMessageHandler(SENSOR_DATA_LOG, loggingMessageHandler);
+        }
+
+        @Override
+        public void failure(Throwable error) {
+            error.printStackTrace();
+            first = 0;
         }
     };
 
@@ -120,20 +126,29 @@ public class BodyLogBoard extends Board{
                 service.resendHeartbeatQueue.offer(getJSON(devicename, String.format("%.3f", System.currentTimeMillis() / 1000.0)));
                 if (first == 0) {
                     first = 1;
+                    try {
+                        board.getModule(Settings.class)
+                                .configureConnectionParameters()
+                                .setMaxConnectionInterval(40.f)
+                                .setSlaveLatency((short) 1)
+                                .commit();
+                    } catch (UnsupportedModuleException e) {
+                        e.printStackTrace();
+                    }
                     board.removeRoutes();
                     try {
                         Logging logger = board.getModule(Logging.class);
                         logger.stopLogging();
                         accel_module = board.getModule(Bmi160Accelerometer.class);
-                        accel_module.stop();
                         accel_module.disableAxisSampling();
+                        accel_module.stop();
                         timerModule = board.getModule(com.mbientlab.metawear.module.Timer.class);
                         timerModule.removeTimers();
                         logger.clearEntries();
                         Debug debug = board.getModule(Debug.class);
-                        debug.resetDevice();
-                        debug.disconnect();
-//                        debug.resetAfterGarbageCollect();
+//                        debug.resetDevice();
+//                        debug.disconnect();
+                        debug.resetAfterGarbageCollect();
 //                        board.removeRoutes();
                     } catch (UnsupportedModuleException e) {
                         e.printStackTrace();
@@ -141,12 +156,13 @@ public class BodyLogBoard extends Board{
                     sensor_status = INITIATED;
                     broadcastStatus();
                     service.writeSensorLog("Board Initialized", ForegroundService._info, devicename);
-                    board.disconnect();
+//                    board.disconnect();
                 } else if (first == 1) {
                     first = 2;
                     try {
                         Logging logger = board.getModule(Logging.class);
                         logger.startLogging(true);
+
                         accel_module = board.getModule(Bmi160Accelerometer.class);
                         accel_module.configureAxisSampling()
                                 .setOutputDataRate(Bmi160Accelerometer.OutputDataRate.ODR_12_5_HZ)
@@ -182,6 +198,7 @@ public class BodyLogBoard extends Board{
                                     public void failure(Throwable error) {
 //                                        super.failure(error);
                                         error.printStackTrace();
+                                        first = 0;
                                     }
                                 });
                             }
@@ -190,6 +207,7 @@ public class BodyLogBoard extends Board{
                             public void failure(Throwable error) {
 //                                super.failure(error);
                                 error.printStackTrace();
+                                first = 0;
                             }
                         });
 
@@ -223,6 +241,12 @@ public class BodyLogBoard extends Board{
                                         }
                                     });
                                 }
+
+                                @Override
+                                public void failure(Throwable error) {
+                                    error.printStackTrace();
+                                    first = 0;
+                                }
                             });
 //                            mcTempModule.readTemperature(tempSources.get(MultiChannelTemperature.MetaWearProChannel.ON_BOARD_THERMISTOR));
                             board.readBatteryLevel().onComplete(new AsyncOperation.CompletionHandler<Byte>() {
@@ -249,7 +273,7 @@ public class BodyLogBoard extends Board{
                         try {
                             board.getModule(Settings.class)
                                     .configureConnectionParameters()
-                                    .setMaxConnectionInterval(1000.f)
+                                    .setMaxConnectionInterval(100.f)
                                     .setSlaveLatency((short) 20)
                                     .commit();
                         } catch (UnsupportedModuleException e) {
@@ -463,8 +487,8 @@ public class BodyLogBoard extends Board{
                         }
                     };
                     // 30s between Reset and Configuration
-                    timer.schedule(reconnect_after_reset, 60000);
-                    service.writeSensorLog("Disconnected from the sensor and scheduled next connection in " + 60000 + " ms", ForegroundService._info, devicename);
+                    timer.schedule(reconnect_after_reset, 120000);
+                    service.writeSensorLog("Disconnected from the sensor and scheduled next connection in " + 120000 + " ms", ForegroundService._info, devicename);
                 } else if (first == 2) {
                     long interval = Constants.CONFIG.BODY_INTERVAL - (System.currentTimeMillis() - connectionAttemptTS) % (Constants.CONFIG.BODY_INTERVAL);
                     TimerTask reconnect = new TimerTask() {

@@ -63,6 +63,12 @@ public class ObjectBoard extends Board{
             service.writeSensorLog("Data routes established", ForegroundService._info, devicename);
             result.setLogMessageHandler(SENSOR_DATA_LOG, loggingMessageHandler);
         }
+
+        @Override
+        public void failure(Throwable error) {
+            error.printStackTrace();
+            first = 0;
+        }
     };
 
     public void destroy() {
@@ -104,35 +110,41 @@ public class ObjectBoard extends Board{
                     first = 1;
                     board.removeRoutes();
                     try {
+                        board.getModule(Settings.class)
+                                .configureConnectionParameters()
+                                .setMaxConnectionInterval(40.f)
+                                .setSlaveLatency((short) 1)
+                                .commit();
+                    } catch (UnsupportedModuleException e) {
+                        e.printStackTrace();
+                    }
+                    try {
                         Logging logger = board.getModule(Logging.class);
                         logger.stopLogging();
                         accel_module = board.getModule(Bmi160Accelerometer.class);
-                        accel_module.stop();
                         accel_module.disableAxisSampling();
+                        accel_module.stop();
                         timerModule = board.getModule(com.mbientlab.metawear.module.Timer.class);
                         timerModule.removeTimers();
                         logger.clearEntries();
                         Debug debug = board.getModule(Debug.class);
-                        debug.resetDevice();
-                        debug.disconnect();
+//                        debug.resetDevice();
+                        debug.resetAfterGarbageCollect();
+//                        debug.disconnect();
                     } catch (UnsupportedModuleException e) {
                         e.printStackTrace();
                     }
                     sensor_status = INITIATED;
                     broadcastStatus();
                     service.writeSensorLog("Board Initialized", ForegroundService._info, devicename);
-                    board.disconnect();
+//                    board.disconnect();
                 } else if (first == 1) {
                     first = 2;
                     try {
                         Logging logger = board.getModule(Logging.class);
                         logger.startLogging(true);
                         accel_module = board.getModule(Bmi160Accelerometer.class);
-                        accel_module.configureAxisSampling()
-                                .setOutputDataRate(Bmi160Accelerometer.OutputDataRate.ODR_1_5625_HZ)
-                                .enableUndersampling((byte) 4)
-                                .commit();
-                        accel_module.routeData().fromAxes().log(SENSOR_DATA_LOG).commit().onComplete(accelHandler);
+
                         timerModule = board.getModule(com.mbientlab.metawear.module.Timer.class);
 
                         timerModule.scheduleTask(new com.mbientlab.metawear.module.Timer.Task() {
@@ -153,6 +165,11 @@ public class ObjectBoard extends Board{
                                     @Override
                                     public void success(RouteManager result) {
                                         Log.i("Anymotion Route", String.valueOf(result.id()));
+                                        accel_module.configureAxisSampling()
+                                                .setOutputDataRate(Bmi160Accelerometer.OutputDataRate.ODR_1_5625_HZ)
+                                                .enableUndersampling((byte) 4)
+                                                .commit();
+                                        accel_module.routeData().fromAxes().log(SENSOR_DATA_LOG).commit().onComplete(accelHandler);
                                         accel_module.configureAnyMotionDetection().setThreshold(0.032f).commit();
                                         accel_module.enableMotionDetection(Bmi160Accelerometer.MotionType.ANY_MOTION);
                                         accel_module.startLowPower();
@@ -162,6 +179,7 @@ public class ObjectBoard extends Board{
                                     public void failure(Throwable error) {
 //                                        super.failure(error);
                                         error.printStackTrace();
+                                        first = 0;
                                     }
                                 });
                             }
@@ -170,6 +188,7 @@ public class ObjectBoard extends Board{
                             public void failure(Throwable error) {
 //                                super.failure(error);
                                 error.printStackTrace();
+                                first = 0;
                             }
                         });
 
@@ -204,6 +223,12 @@ public class ObjectBoard extends Board{
                                         }
                                     });
                                 }
+
+                                @Override
+                                public void failure(Throwable error) {
+                                    error.printStackTrace();
+                                    first = 0;
+                                }
                             });
 //                            mcTempModule.readTemperature(tempSources.get(MultiChannelTemperature.MetaWearProChannel.ON_BOARD_THERMISTOR));
                             board.readBatteryLevel().onComplete(new AsyncOperation.CompletionHandler<Byte>() {
@@ -230,7 +255,7 @@ public class ObjectBoard extends Board{
                         try {
                             board.getModule(Settings.class)
                                     .configureConnectionParameters()
-                                    .setMaxConnectionInterval(1000.f)
+                                    .setMaxConnectionInterval(100.f)
                                     .setSlaveLatency((short) 20)
                                     .commit();
                         } catch (UnsupportedModuleException e) {
@@ -348,11 +373,13 @@ public class ObjectBoard extends Board{
                                     }
                                     //process listed data
                                     // send to server
-                                    ArrayList<String> data = getFilteredDataCache((ArrayList<Datapoint>)datalist);
-                                    if (data.size() > 0) {
-                                        ArrayList<String> data_array = getJSONList(devicename, data);
-                                        for (String s : data_array) {
-                                            service.resendDataQueue.offer(s);
+                                    if (!datalist.isEmpty()) {
+                                        ArrayList<String> data = getFilteredDataCache((ArrayList<Datapoint>)datalist);
+                                        if (data.size() > 0) {
+                                            ArrayList<String> data_array = getJSONList(devicename, data);
+                                            for (String s : data_array) {
+                                                service.resendDataQueue.offer(s);
+                                            }
                                         }
                                     }
                                     datalist.clear();

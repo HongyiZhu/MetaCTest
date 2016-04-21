@@ -262,7 +262,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                         resendTempQueue.add(line);
                     } else if (line.contains("\"b\"")) {
                         resendBatteryQueue.add(line);
-                    } else {
+                    } else if (line.contains("\"logs\"")) {
                         resendDataQueue.add(line);
                     }
                 }
