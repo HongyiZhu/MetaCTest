@@ -1,6 +1,5 @@
 package com.example.hongyi.foregroundtest;
 
-import android.os.AsyncTask;
 import android.util.Log;
 
 import com.mbientlab.metawear.AsyncOperation;
@@ -59,6 +58,7 @@ public class ObjectBoard extends Board{
         public void success(RouteManager result) {
 //                state = board.serializeState();
             routeID = result.id();
+            data_ID = routeID;
             Log.i("info", String.format("RouteID: %d", routeID));
             service.writeSensorLog("Data routes established", ForegroundService._info, devicename);
             result.setLogMessageHandler(SENSOR_DATA_LOG, loggingMessageHandler);
@@ -107,6 +107,10 @@ public class ObjectBoard extends Board{
                 connectionFailureCount = 0;
                 service.resendHeartbeatQueue.offer(getJSON(devicename, String.format("%.3f", System.currentTimeMillis()/1000.0)));
                 if (first == 0) {
+                    data_ID = -1;
+                    temperature_ID = -1;
+                    anymotion_ID = -1;
+                    trigger_mode_timer_ID = -1;
                     first = 1;
                     board.removeRoutes();
                     try {
@@ -155,6 +159,7 @@ public class ObjectBoard extends Board{
                         }, 3000, true).onComplete(new AsyncOperation.CompletionHandler<com.mbientlab.metawear.module.Timer.Controller>() {
                             @Override
                             public void success(final com.mbientlab.metawear.module.Timer.Controller result) {
+                                trigger_mode_timer_ID = result.id();
                                 accel_module.routeData().fromMotion().monitor(new DataSignal.ActivityHandler() {
                                     @Override
                                     public void onSignalActive(Map<String, DataProcessor> map, DataSignal.DataToken dataToken) {
@@ -165,6 +170,7 @@ public class ObjectBoard extends Board{
                                     @Override
                                     public void success(RouteManager result) {
                                         Log.i("Anymotion Route", String.valueOf(result.id()));
+                                        anymotion_ID = result.id();
                                         accel_module.configureAxisSampling()
                                                 .setOutputDataRate(Bmi160Accelerometer.OutputDataRate.ODR_1_5625_HZ)
                                                 .enableUndersampling((byte) 4)
@@ -204,6 +210,7 @@ public class ObjectBoard extends Board{
                                 @Override
                                 public void success(RouteManager result) {
                                     Log.i("Temperature Route", String.valueOf(result.id()));
+                                    temperature_ID = result.id();
                                     result.subscribe("temp_"+devicename, new RouteManager.MessageHandler() {
                                         @Override
                                         public void process(Message message) {

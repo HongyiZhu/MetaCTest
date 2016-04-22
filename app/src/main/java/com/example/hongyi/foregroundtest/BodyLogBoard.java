@@ -69,6 +69,7 @@ public class BodyLogBoard extends Board{
         public void success(RouteManager result) {
 //                state = board.serializeState();
             routeID = result.id();
+            data_ID = routeID;
             Log.i("info", String.format("RouteID: %d", routeID));
             service.writeSensorLog("Data routes established", ForegroundService._info, devicename);
             result.setLogMessageHandler(SENSOR_DATA_LOG, loggingMessageHandler);
@@ -125,6 +126,10 @@ public class BodyLogBoard extends Board{
                 }
                 service.resendHeartbeatQueue.offer(getJSON(devicename, String.format("%.3f", System.currentTimeMillis() / 1000.0)));
                 if (first == 0) {
+                    data_ID = -1;
+                    temperature_ID = -1;
+                    anymotion_ID = -1;
+                    trigger_mode_timer_ID = -1;
                     first = 1;
                     try {
                         board.getModule(Settings.class)
@@ -179,6 +184,7 @@ public class BodyLogBoard extends Board{
                         }, 3000, true).onComplete(new AsyncOperation.CompletionHandler<com.mbientlab.metawear.module.Timer.Controller>() {
                             @Override
                             public void success(final com.mbientlab.metawear.module.Timer.Controller result) {
+                                trigger_mode_timer_ID = result.id();
                                 accel_module.routeData().fromMotion().monitor(new DataSignal.ActivityHandler() {
                                     @Override
                                     public void onSignalActive(Map<String, DataProcessor> map, DataSignal.DataToken dataToken) {
@@ -189,6 +195,7 @@ public class BodyLogBoard extends Board{
                                     @Override
                                     public void success(RouteManager result) {
                                         Log.i("Anymotion Route", String.valueOf(result.id()));
+                                        anymotion_ID = result.id();
                                         accel_module.configureAnyMotionDetection().setThreshold(0.032f).commit();
                                         accel_module.enableMotionDetection(Bmi160Accelerometer.MotionType.ANY_MOTION);
                                         accel_module.startLowPower();
@@ -222,6 +229,7 @@ public class BodyLogBoard extends Board{
                                 @Override
                                 public void success(RouteManager result) {
                                     Log.i("Temperature Route", String.valueOf(result.id()));
+                                    temperature_ID = result.id();
                                     result.subscribe("temp_"+devicename, new RouteManager.MessageHandler() {
                                         @Override
                                         public void process(Message message) {
@@ -285,11 +293,6 @@ public class BodyLogBoard extends Board{
                         timer.schedule(new TimerTask() {
                             @Override
                             public void run() {
-//                                try {
-//                                    board.getModule(Logging.class).clearEntries();
-//                                } catch (UnsupportedModuleException e) {
-//                                    e.printStackTrace();
-//                                }
                                 board.disconnect();
                                 if (!sensor_status.equals(OUT_OF_BATTERY)) {
                                     sensor_status = CONFIGURED;
@@ -301,7 +304,7 @@ public class BodyLogBoard extends Board{
                         e.printStackTrace();
                     }
                     service.writeSensorLog("Board configured", ForegroundService._info, devicename);
-                } else if (first == 2) {
+                } else if (first == 2 || first == 3) {
                     try {
                         sensor_status = CONNECTED;
                         Logging logger = board.getModule(Logging.class);
@@ -407,6 +410,10 @@ public class BodyLogBoard extends Board{
                                         }
                                         total = 0;
 
+                                        if (first == 3) {
+                                            first = 0;
+                                        }
+
                                         timer.schedule(new TimerTask() {
                                             @Override
                                             public void run() {
@@ -431,6 +438,9 @@ public class BodyLogBoard extends Board{
                                     Log.i("Data to download", String.valueOf(result));
                                     if (result == 0) {
                                         sensor_status = DISCONNECTED_OBJ;
+                                        if (first == 3) {
+                                            first = 0;
+                                        }
                                         board.disconnect();
                                         broadcastStatus();
                                         service.writeSensorLog("No data generated", ForegroundService._success, devicename);
@@ -476,7 +486,7 @@ public class BodyLogBoard extends Board{
 
             @Override
             public void disconnected() {
-                if (first == 1) {
+                if (first == 1 || first == 0) {
                     TimerTask reconnect_after_reset = new TimerTask() {
                         @Override
                         synchronized public void run() {
@@ -537,9 +547,16 @@ public class BodyLogBoard extends Board{
                             public void run() {
                                 Set<String> nearMW = service.scanBle(8000);
                                 if (nearMW.contains(service.getSensors(0))) {
-                                    away = false;
-                                    scanCount += 1;
-                                    board.connect();
+                                    if (away) {
+                                        away = false;
+                                        scanCount = 0;
+                                        first = 3;
+                                        board.connect();
+                                    } else {
+                                        away = false;
+                                        scanCount += 1;
+                                        board.connect();
+                                    }
                                 } else {
                                     away = true;
                                     sensor_status = AWAY;

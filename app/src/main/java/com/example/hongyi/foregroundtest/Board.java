@@ -17,6 +17,10 @@ import java.util.ArrayList;
  * Created by Hongyi on 3/16/2016.
  */
 public class Board {
+    public int data_ID;
+    public int temperature_ID;
+    public int anymotion_ID;
+    public int trigger_mode_timer_ID;
     public ForegroundService service;
     public MetaWearBoard board;
     public Bmi160Accelerometer accel_module;
