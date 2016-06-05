@@ -24,7 +24,7 @@
 2. Download [SilverLinkC.apk](http://bit.ly/1LS4vrq) and install the application.
 3. Open the application after installation.
 
-* [SilverlinkC_3min.apk](https://raw.github.com/HongyiZhu/MetaCTest/master/app/SilverLinkC_3min.apk)
+<!-- * [SilverlinkC_3min.apk](https://raw.github.com/HongyiZhu/MetaCTest/master/app/SilverLinkC_3min.apk) -->
 
 ### Read gateway logs on the gateway
 1. Download and install [ES File Explorer](http://bit.ly/1LS7gZH).
