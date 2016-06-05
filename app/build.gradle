@@ -18,7 +18,7 @@ android {
         applicationId "com.example.hongyi.foregroundtest"
         minSdkVersion 19
         targetSdkVersion 23
-        versionCode verBuild + verMinor * 10000 + verMajor * 100000
+        versionCode verBuild + verMinor * 10000 + verMajor * 1000000
         versionName "${verMajor}.${verMinor}.${verBuild}"
     }
     buildTypes {

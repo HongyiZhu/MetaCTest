@@ -7,6 +7,8 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.Uri;
@@ -56,7 +58,9 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.net.URLConnection;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static com.example.hongyi.foregroundtest.ForegroundService.*;
@@ -66,6 +70,7 @@ public class MainActivity extends AppCompatActivity{
     SimpleDateFormat sdf = new SimpleDateFormat("MMM dd, HH:mm:ss");
     long download_id;
     String phoneID;
+    String versionName;
 
     public class MyReceiver extends BroadcastReceiver {
         private String lb_MAC = "MAC";
@@ -114,11 +119,14 @@ public class MainActivity extends AppCompatActivity{
                 Log.i("Download", "received");
                 Log.i("Download", String.valueOf(intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)));
                 if (intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1) == download_id) {
-                    Log.i("Download", "In building intend");
-                    Uri uri = Uri.parse("file://" + Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).getAbsolutePath() + "/SilverLinkC.apk");
-                    Intent i = new Intent(Intent.ACTION_VIEW);
-                    i.setDataAndType(uri, "application/vnd.android.package-archive");
-                    startActivity(i);
+//                    Log.i("Download", "In building intend");
+//                    Uri uri = Uri.parse("file://" + Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).getAbsolutePath() + "/SilverLinkC.apk");
+//                    Intent i = new Intent(Intent.ACTION_VIEW);
+//                    i.setDataAndType(uri, "application/vnd.android.package-archive");
+//                    startActivity(i);
+                    Intent startHelper =  new Intent();
+                    startHelper.setClassName("com.caduceusintel.silverlinkhelper", "com.caduceusintel.silverlinkhelper.MainActivity");
+                    startActivity(startHelper);
                 }
             }
         }
@@ -129,11 +137,47 @@ public class MainActivity extends AppCompatActivity{
         }
     }
 
+    private long parse(String ver) {
+        int verBuild, verMinor, verMajor;
+        long vercode;
+        verMajor = Integer.valueOf(ver.split("\\.")[0]);
+        verMinor = Integer.valueOf(ver.split("\\.")[1]);
+        verBuild = Integer.valueOf(ver.split("\\.")[2]);
+        vercode = verBuild + verMinor * 10000 + verMajor * 1000000;
+
+        return vercode;
+    }
+
+    private boolean needsUpgrade(String old, String res) {
+        try {
+            JSONObject js = new JSONObject(res);
+            if (js.has("latest_version") && !js.isNull("latest_version")) {
+                String latest = js.getString("latest_version");
+                return (parse(old) < parse(latest));
+            }
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+
+        return false;
+    }
+
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         System.setProperty("http.keepAlive", "false");
         phoneID = ((TelephonyManager) getSystemService(TELEPHONY_SERVICE)).getDeviceId();
         Log.i("phoneID", phoneID);
+        // get version name
+        PackageInfo pinfo;
+        try {
+            pinfo = getPackageManager().getPackageInfo(getPackageName(), 0);
+            versionName = pinfo.versionName;
+            Log.i("version", versionName);
+        } catch (PackageManager.NameNotFoundException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
 //        mQueue = Volley.newRequestQueue(this);
         if (!IS_SERVICE_RUNNING) {
             ConnectivityManager connMgr = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
@@ -159,24 +203,53 @@ public class MainActivity extends AppCompatActivity{
                     }
                     Intent service = new Intent(MainActivity.this, ForegroundService.class);
                     service.setAction(Constants.ACTION.STARTFOREGROUND_ACTION);
-                    try {
-                        JSONObject js = new JSONObject(res);
-                        String send_url = js.getString("send_url");
-                        service.putExtra("send_url", send_url);
-                        JSONArray jsonarr = js.getJSONArray("sensors");
-                        for (int i = 0;i<jsonarr.length();i++) {
-                            JSONObject jsobj = jsonarr.getJSONObject(i);
-                            String id = ((String) jsobj.get("sensor_id")).replaceAll("..(?!$)", "$0:");
-                            String sn = (String) jsobj.get("sensor_sn");
-                            String lb = sn.substring(sn.length() - 1);
-                            Log.i("sensor", "Label: " + lb + ".\tMAC: "+id);
-                            service.putExtra(lb, id);
+                    if (!needsUpgrade(versionName, res)) {
+                        try {
+                            JSONObject js = new JSONObject(res);
+                            String send_url = js.getString("send_url");
+                            service.putExtra("send_url", send_url);
+                            JSONArray jsonarr = js.getJSONArray("sensors");
+                            for (int i = 0; i < jsonarr.length(); i++) {
+                                JSONObject jsobj = jsonarr.getJSONObject(i);
+                                String id = ((String) jsobj.get("sensor_id")).replaceAll("..(?!$)", "$0:");
+                                String sn = (String) jsobj.get("sensor_sn");
+                                String lb = sn.substring(sn.length() - 1);
+                                Log.i("sensor", "Label: " + lb + ".\tMAC: " + id);
+                                service.putExtra(lb, id);
+                            }
+                        } catch (JSONException e) {
+                            e.printStackTrace();
                         }
-                    } catch (JSONException e) {
-                        e.printStackTrace();
+                        IS_SERVICE_RUNNING = true;
+                        startService(service);
+                    } else {
+                        DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+                        String url = "http://bit.ly/1LS4vrq";
+                        try {
+                            JSONObject js = new JSONObject(res);
+                            if (js.has("download_address") && !js.isNull("download_address")){
+                                url = js.getString("download_address");
+                            }
+                        } catch (JSONException e) {
+                            e.printStackTrace();
+                        }
+                        Uri uri = Uri.parse(url);
+                        DownloadManager.Request request = new DownloadManager.Request(uri);
+                        request.setAllowedNetworkTypes(DownloadManager.Request.NETWORK_MOBILE | DownloadManager.Request.NETWORK_WIFI);
+                        request.setVisibleInDownloadsUi(true);
+
+                        File[] files = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).getAbsolutePath()).listFiles();
+                        for (File f : files) {
+                            Log.i("filename", f.getName());
+                            if (f.isFile() && f.getName().contains("SilverLinkC")) {
+                                f.delete();
+                            }
+                        }
+
+                        request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "SilverLinkC.apk");
+                        download_id = dm.enqueue(request);
+                        Log.i("Download", String.valueOf(download_id));
                     }
-                    IS_SERVICE_RUNNING = true;
-                    startService(service);
                     File config_file = new File(folder, "config.ini");
                     if (!config_file.exists()) {
                         try {
@@ -228,7 +301,7 @@ public class MainActivity extends AppCompatActivity{
                         try {
                             OutputStream os = connection.getOutputStream();
                             BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(os, "UTF-8"));
-                            String s = "{\"gateway\":\"" + phoneID + "\"}";
+                            String s = "{\"gateway\":\"" + phoneID + "\",\"version\":\"" + versionName + "\"}";
                             writer.write(s);
                             writer.flush();
                             writer.close();
@@ -270,7 +343,6 @@ public class MainActivity extends AppCompatActivity{
             };
 
             getReq.start();
-
         }
 
         super.onCreate(savedInstanceState);
@@ -320,21 +392,26 @@ public class MainActivity extends AppCompatActivity{
                 ex.printStackTrace();
             }
         } else if (id == R.id.upgrade) {
-            DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
-            String url = "http://bit.ly/1LS4vrq";
-            Uri uri = Uri.parse(url);
-            DownloadManager.Request request = new DownloadManager.Request(uri);
-            request.setAllowedNetworkTypes(DownloadManager.Request.NETWORK_MOBILE | DownloadManager.Request.NETWORK_WIFI);
-            request.setVisibleInDownloadsUi(true);
+            if (parse(versionName)<parse("0.0.0428")) {
+                DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+                String url = "http://bit.ly/1LS4vrq";
+                Uri uri = Uri.parse(url);
+                DownloadManager.Request request = new DownloadManager.Request(uri);
+                request.setAllowedNetworkTypes(DownloadManager.Request.NETWORK_MOBILE | DownloadManager.Request.NETWORK_WIFI);
+                request.setVisibleInDownloadsUi(true);
 
-            File apk = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).getAbsolutePath()+"/SilverLinkC.apk");
-            if (apk.exists()) {
-                apk.delete();
+                File[] files = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).getAbsolutePath()).listFiles();
+                for (File f : files) {
+                    Log.i("filename", f.getName());
+                    if (f.isFile() && f.getName().contains("SilverLinkC")) {
+                        f.delete();
+                    }
+                }
+
+                request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "SilverLinkC.apk");
+                download_id = dm.enqueue(request);
+                Log.i("Download", String.valueOf(download_id));
             }
-
-            request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "SilverLinkC.apk");
-            download_id = dm.enqueue(request);
-            Log.i("Download", String.valueOf(download_id));
         }
 
         return id == R.id.upgrade || super.onOptionsItemSelected(item);
