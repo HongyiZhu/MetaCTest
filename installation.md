@@ -24,6 +24,13 @@
 2. Download [SilverLinkC.apk](http://bit.ly/1LS4vrq) and install the application.
 3. Open the application after installation.
 
+
+### Change Local Timezone on the Gateway
+1. Download [ClockSync.apk](http://bit.ly/28TWyk1) and install the application.
+2. Download [TimezoneDB.apk](http://bit.ly/297ps0A) and install.
+3. Open **ClockSync** application and click on '**Menu**'->'**Settings**'.
+4. Scroll down and select '**Use offline database**', then you can select the corresponding timezone.
+
 <!-- * [SilverlinkC_3min.apk](https://raw.github.com/HongyiZhu/MetaCTest/master/app/SilverLinkC_3min.apk) -->
 
 ### Read gateway logs on the gateway
