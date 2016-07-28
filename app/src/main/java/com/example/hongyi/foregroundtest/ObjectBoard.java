@@ -47,9 +47,11 @@ public class ObjectBoard extends Board{
     private final RouteManager.MessageHandler loggingMessageHandler = new RouteManager.MessageHandler() {
         @Override
         public void process(Message message) {
-            CartesianFloat data = message.getData(CartesianFloat.class);
-            double time = message.getTimestamp().getTimeInMillis() / 1000.0;
-            datalist.add(new Datapoint(data, time));
+            if (System.currentTimeMillis() + 120000 >= message.getTimestamp().getTimeInMillis()) {
+                CartesianFloat data = message.getData(CartesianFloat.class);
+                double time = message.getTimestamp().getTimeInMillis() / 1000.0;
+                datalist.add(new Datapoint(data, time));
+            }
         }
     };
 

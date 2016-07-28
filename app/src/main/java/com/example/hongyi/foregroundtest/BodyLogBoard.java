@@ -58,9 +58,11 @@ public class BodyLogBoard extends Board{
         @Override
         public void process(Message message) {
             //get timestamp
-            double time = message.getTimestamp().getTimeInMillis() / 1000.0;
-            CartesianFloat data = message.getData(CartesianFloat.class);
-            datalist.add(new Datapoint(data, time));
+            if (System.currentTimeMillis() + 120000 >= message.getTimestamp().getTimeInMillis()) {
+                double time = message.getTimestamp().getTimeInMillis() / 1000.0;
+                CartesianFloat data = message.getData(CartesianFloat.class);
+                datalist.add(new Datapoint(data, time));
+            }
         }
     };
 

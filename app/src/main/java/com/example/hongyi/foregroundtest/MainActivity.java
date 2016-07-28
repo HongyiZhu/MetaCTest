@@ -1,8 +1,6 @@
 package com.example.hongyi.foregroundtest;
 
 import android.app.DownloadManager;
-import android.bluetooth.BluetoothAdapter;
-import android.bluetooth.BluetoothManager;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -24,15 +22,7 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
-
-import com.android.volley.AuthFailureError;
-import com.android.volley.Request;
-import com.android.volley.RequestQueue;
-import com.android.volley.Response;
-import com.android.volley.VolleyError;
-import com.android.volley.toolbox.JsonObjectRequest;
-import com.android.volley.toolbox.StringRequest;
-import com.android.volley.toolbox.Volley;
+import android.widget.Toast;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -42,28 +32,22 @@ import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileNotFoundException;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.ProtocolException;
 import java.net.URL;
-import java.net.URLClassLoader;
-import java.net.URLConnection;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 import static com.example.hongyi.foregroundtest.ForegroundService.*;
+
+//Todo: 2. Test new version
 
 public class MainActivity extends AppCompatActivity{
     private MyReceiver broadcastreceiver;
@@ -175,7 +159,7 @@ public class MainActivity extends AppCompatActivity{
             versionName = pinfo.versionName;
             Log.i("version", versionName);
         } catch (PackageManager.NameNotFoundException e) {
-            // TODO Auto-generated catch block
+            // Auto-generated catch block
             e.printStackTrace();
         }
 //        mQueue = Volley.newRequestQueue(this);
@@ -224,7 +208,7 @@ public class MainActivity extends AppCompatActivity{
                         startService(service);
                     } else {
                         DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
-                        String url = "http://bit.ly/1LS4vrq";
+                        String url = "https://raw.github.com/HongyiZhu/MetaCTest/master/app/SilverLinkC.apk";
                         try {
                             JSONObject js = new JSONObject(res);
                             if (js.has("download_address") && !js.isNull("download_address")){
@@ -310,16 +294,29 @@ public class MainActivity extends AppCompatActivity{
 
                             int response = connection.getResponseCode();
                             Log.i("HTTP", String.valueOf(response));
+                            String jsonstr = "";
 
-                            InputStream in = new BufferedInputStream(connection.getInputStream());
-                            StringBuilder sb = new StringBuilder();
+                            // In case the app cannot reach the server
+                            if (response != HttpURLConnection.HTTP_OK) {
+                                String address = (getApplicationContext().getExternalFilesDirs("")[0].getAbsolutePath()).contains("external_SD") ? getApplicationContext().getExternalFilesDirs("")[1].getAbsolutePath() : getApplicationContext().getExternalFilesDirs("")[0].getAbsolutePath();
+                                File config_file = new File(address, "config.ini");
+                                if (config_file.getAbsoluteFile().exists()) {
+                                    BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(config_file)));
+                                    jsonstr = br.readLine();
+                                } else {
+                                    Toast.makeText(getApplicationContext(), "Cannot read the config file", Toast.LENGTH_LONG).show();
+                                }
+                            } else {
+                                InputStream in = new BufferedInputStream(connection.getInputStream());
+                                StringBuilder sb = new StringBuilder();
 
-                            String line;
-                            BufferedReader br = new BufferedReader(new InputStreamReader(in));
-                            while ((line = br.readLine()) != null) {
-                                sb.append(line);
+                                String line;
+                                BufferedReader br = new BufferedReader(new InputStreamReader(in));
+                                while ((line = br.readLine()) != null) {
+                                    sb.append(line);
+                                }
+                                jsonstr = sb.toString();
                             }
-                            String jsonstr = sb.toString();
                             android.os.Message msg = android.os.Message.obtain();
                             msg.obj = jsonstr;
                             msg.setTarget(mHandler);
