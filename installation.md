@@ -20,7 +20,7 @@
 
 
 ### Install/Upgrade the SilverLink Gateway Application
-1. Download [SilverLinkHelper.apk](https://raw.github.com/HongyiZhu/MetaCTest/master/app/SilverLinkHelper.apk) and install the application.
+1. Download [SilverLinkHelper.apk](https://raw.github.com/HongyiZhu/MetaCTest/master/app/SilverLinkHelper.apk) and install the application. Do not open the application.
 2. Download [SilverLinkC.apk](https://raw.github.com/HongyiZhu/MetaCTest/master/app/SilverLinkC.apk) and install the application.
 3. Open the application after installation.
 
