@@ -25,7 +25,6 @@ public class MyAsyncTask extends AsyncTask<String, Boolean, String> {
     String urlbase;
     String request;
 
-    //Todo: 3. Catch Wifi disconnect (drop the packets)
     MyAsyncTask(ForegroundService service, String request) {
         super();
         this.service = service;
@@ -33,6 +32,12 @@ public class MyAsyncTask extends AsyncTask<String, Boolean, String> {
         urlbase = service.send_url_base + request;
     }
 
+    private boolean need_to_drop(String message) {
+        if (message.contains("DNS") || message.contains("unreachable") || message.contains("resolve")) {
+            return true;
+        }
+        return false;
+    }
 
     @Override
     protected String doInBackground(String... params) {
@@ -103,23 +108,28 @@ public class MyAsyncTask extends AsyncTask<String, Boolean, String> {
             } catch (IOException e) {
                 // Catch Wifi error
                 Log.e(ForegroundService.LOG_ERR, "Connection error " + e.getMessage() + " " + params[0]);
-                switch (request) {
-                    case "heartbeat":
-                        service.resendHeartbeatQueue.offer(params[0]);
-                        break;
-                    case "logs":
-                        service.resendDataQueue.offer(params[0]);
-                        break;
-                    case "temperature":
-                        service.resendTempQueue.offer(params[0]);
-                        break;
-                    case "battery":
-                        service.resendBatteryQueue.offer(params[0]);
-                        break;
-                }
-                service.sendJobSet.remove(params[0]);
-                service.writeSensorLog("Connection error: " + e.getMessage() + ", dropped:  " + params[0], ForegroundService._error);
+                if (need_to_drop(e.getMessage())) {
+                    // TODO: Catch server rejection
+                    service.sendJobSet.remove(params[0]);
+                    service.writeSensorLog("Connection error: " + e.getMessage() + ", dropped:  " + params[0], ForegroundService._error);
 //                service.writeSensorLog("Connection error: " + e.getMessage() + " " + params[0], ForegroundService._error);
+                } else {
+                    service.writeSensorLog("Connection error: " + e.getMessage() + " " + params[0], ForegroundService._error);
+                    switch (request) {
+                        case "heartbeat":
+                            service.resendHeartbeatQueue.offer(params[0]);
+                            break;
+                        case "logs":
+                            service.resendDataQueue.offer(params[0]);
+                            break;
+                        case "temperature":
+                            service.resendTempQueue.offer(params[0]);
+                            break;
+                        case "battery":
+                            service.resendBatteryQueue.offer(params[0]);
+                            break;
+                    }
+                }
                 if (e.getMessage().contains("") && !service.wifiReset_report) {
                     service.wifiReset_report = true;
                 }
@@ -127,20 +137,20 @@ public class MyAsyncTask extends AsyncTask<String, Boolean, String> {
         } else {
             // Catch Wifi error
             Log.e(ForegroundService.LOG_ERR, "No active connection");
-            switch (request) {
-                case "heartbeat":
-                    service.resendHeartbeatQueue.offer(params[0]);
-                    break;
-                case "logs":
-                    service.resendDataQueue.offer(params[0]);
-                    break;
-                case "temperature":
-                    service.resendTempQueue.offer(params[0]);
-                    break;
-                case "battery":
-                    service.resendBatteryQueue.offer(params[0]);
-                    break;
-            }
+//            switch (request) {
+//                case "heartbeat":
+//                    service.resendHeartbeatQueue.offer(params[0]);
+//                    break;
+//                case "logs":
+//                    service.resendDataQueue.offer(params[0]);
+//                    break;
+//                case "temperature":
+//                    service.resendTempQueue.offer(params[0]);
+//                    break;
+//                case "battery":
+//                    service.resendBatteryQueue.offer(params[0]);
+//                    break;
+//            }
             service.writeSensorLog("No active connection, dropped: " + params[0], ForegroundService._error);
 //            service.writeSensorLog("No active connection, add to wait queue: " + params[0], ForegroundService._error);
             service.sendJobSet.remove(params[0]);
