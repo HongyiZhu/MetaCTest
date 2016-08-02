@@ -82,6 +82,10 @@ public class MyAsyncTask extends AsyncTask<String, Boolean, String> {
                             line = br.readLine();
                         }
                         service.sendJobSet.remove(params[0]);
+                    } else if (response == 409) {
+                        // Drop data if duplicated entries found
+                        service.sendJobSet.remove(params[0]);
+                        service.writeSensorLog("Database error: dropped:  " + params[0], ForegroundService._error);
                     } else {
                         Log.e(ForegroundService.LOG_ERR, "Post error code: " + response + " " + params[0]);
                         switch (request) {
@@ -109,7 +113,6 @@ public class MyAsyncTask extends AsyncTask<String, Boolean, String> {
                 // Catch Wifi error
                 Log.e(ForegroundService.LOG_ERR, "Connection error " + e.getMessage() + " " + params[0]);
                 if (need_to_drop(e.getMessage())) {
-                    // TODO: Catch server rejection
                     service.sendJobSet.remove(params[0]);
                     service.writeSensorLog("Connection error: " + e.getMessage() + ", dropped:  " + params[0], ForegroundService._error);
 //                service.writeSensorLog("Connection error: " + e.getMessage() + " " + params[0], ForegroundService._error);
