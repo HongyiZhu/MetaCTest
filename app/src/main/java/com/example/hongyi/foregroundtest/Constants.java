@@ -20,6 +20,15 @@ public class Constants {
         int LOW_BATTERY_THRES = 3;
     }
 
+    public interface STAGE {
+        int INIT = 0;
+        int CONFIGURE = 1;
+        int DOWNLOAD = 2;
+        int BACK_IN_RANGE = 3;
+        int DESTROY = -1;
+        int OUT_OF_BATTERY = -2;
+    }
+
     public interface ACTION {
         String MAIN_ACTION = "com.marothiatechs.foregroundservice.action.main";
         String INIT_ACTION = "com.marothiatechs.foregroundservice.action.init";

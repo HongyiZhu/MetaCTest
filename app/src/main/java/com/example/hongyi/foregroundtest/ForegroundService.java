@@ -21,7 +21,6 @@ import android.content.Intent;
 import android.content.ServiceConnection;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.os.AsyncTask;
 import android.os.Build;
 import android.os.IBinder;
 import android.os.ParcelUuid;
@@ -30,8 +29,6 @@ import android.util.Log;
 
 import com.mbientlab.metawear.MetaWearBleService;
 import com.mbientlab.metawear.MetaWearBoard;
-import com.mbientlab.metawear.UnsupportedModuleException;
-import com.mbientlab.metawear.module.Settings;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -64,7 +61,6 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.RunnableFuture;
 
 public class ForegroundService extends Service implements ServiceConnection{
     public Set<String> sendJobSet;
@@ -314,7 +310,7 @@ public class ForegroundService extends Service implements ServiceConnection{
     public void onDestroy() {
         Log.i(LOG_TAG, "In onDestroy");
         writeSensorLog("In onDestroy", _info);
-        ((BodyLogBoard) boards.get(0)).first = -1;
+        ((BodyLogBoard) boards.get(0)).connectionStage = Constants.STAGE.DESTROY;
         boards.get(0).board.connect();
         Log.i(LOG_TAG, "Body sensor destroyed");
         writeSensorLog("Body sensor destroyed", _info);

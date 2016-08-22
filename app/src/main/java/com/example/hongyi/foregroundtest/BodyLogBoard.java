@@ -1,6 +1,5 @@
 package com.example.hongyi.foregroundtest;
 
-import android.os.AsyncTask;
 import android.util.Log;
 
 import com.mbientlab.metawear.AsyncOperation;
@@ -17,16 +16,13 @@ import com.mbientlab.metawear.module.Logging;
 import com.mbientlab.metawear.module.MultiChannelTemperature;
 import com.mbientlab.metawear.module.Settings;
 
-import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
-import java.util.concurrent.ExecutionException;
 
 /**
  * Created by Hongyi on 3/17/2016.
@@ -36,7 +32,7 @@ public class BodyLogBoard extends Board{
     private final float sampleFreq;
     public String devicename;
     private final String SENSOR_DATA_LOG;
-    public int first = 0;
+    public int connectionStage = Constants.STAGE.INIT;
     private List<Datapoint> datalist = null;
     private int routeID = 0;
     boolean configured = false;
@@ -69,7 +65,6 @@ public class BodyLogBoard extends Board{
     private final AsyncOperation.CompletionHandler<RouteManager> accelHandler = new AsyncOperation.CompletionHandler<RouteManager>() {
         @Override
         public void success(RouteManager result) {
-//                state = board.serializeState();
             routeID = result.id();
             data_ID = routeID;
             Log.i("info", String.format("RouteID: %d", routeID));
@@ -80,7 +75,7 @@ public class BodyLogBoard extends Board{
         @Override
         public void failure(Throwable error) {
             error.printStackTrace();
-            first = 0;
+            connectionStage = Constants.STAGE.INIT;
         }
     };
 
@@ -127,12 +122,13 @@ public class BodyLogBoard extends Board{
                     searchTM = null;
                 }
                 service.resendHeartbeatQueue.offer(getJSON(devicename, String.format("%.3f", System.currentTimeMillis() / 1000.0)));
-                if (first == 0) {
+                if (connectionStage == Constants.STAGE.INIT) {
                     data_ID = -1;
                     temperature_ID = -1;
                     anymotion_ID = -1;
                     trigger_mode_timer_ID = -1;
-                    first = 1;
+                    connectionStage = Constants.STAGE.CONFIGURE;
+                    board.removeRoutes();
                     try {
                         board.getModule(Settings.class)
                                 .configureConnectionParameters()
@@ -142,7 +138,6 @@ public class BodyLogBoard extends Board{
                     } catch (UnsupportedModuleException e) {
                         e.printStackTrace();
                     }
-                    board.removeRoutes();
                     try {
                         Logging logger = board.getModule(Logging.class);
                         logger.stopLogging();
@@ -153,28 +148,20 @@ public class BodyLogBoard extends Board{
                         timerModule.removeTimers();
                         logger.clearEntries();
                         Debug debug = board.getModule(Debug.class);
-//                        debug.resetDevice();
-//                        debug.disconnect();
                         debug.resetAfterGarbageCollect();
-//                        board.removeRoutes();
                     } catch (UnsupportedModuleException e) {
                         e.printStackTrace();
                     }
                     sensor_status = INITIATED;
                     broadcastStatus();
                     service.writeSensorLog("Board Initialized", ForegroundService._info, devicename);
-//                    board.disconnect();
-                } else if (first == 1) {
-                    first = 2;
+                } else if (connectionStage == Constants.STAGE.CONFIGURE) {
+                    connectionStage = Constants.STAGE.DOWNLOAD;
                     try {
                         Logging logger = board.getModule(Logging.class);
                         logger.startLogging(true);
 
                         accel_module = board.getModule(Bmi160Accelerometer.class);
-                        accel_module.configureAxisSampling()
-                                .setOutputDataRate(Bmi160Accelerometer.OutputDataRate.ODR_12_5_HZ)
-                                .commit();
-                        accel_module.routeData().fromAxes().log(SENSOR_DATA_LOG).commit().onComplete(accelHandler);
 
                         timerModule = board.getModule(com.mbientlab.metawear.module.Timer.class);
 
@@ -198,6 +185,10 @@ public class BodyLogBoard extends Board{
                                     public void success(RouteManager result) {
                                         Log.i("Anymotion Route", String.valueOf(result.id()));
                                         anymotion_ID = result.id();
+                                        accel_module.configureAxisSampling()
+                                                .setOutputDataRate(Bmi160Accelerometer.OutputDataRate.ODR_12_5_HZ)
+                                                .commit();
+                                        accel_module.routeData().fromAxes().log(SENSOR_DATA_LOG).commit().onComplete(accelHandler);
                                         accel_module.configureAnyMotionDetection().setThreshold(0.032f).commit();
                                         accel_module.enableMotionDetection(Bmi160Accelerometer.MotionType.ANY_MOTION);
                                         accel_module.startLowPower();
@@ -205,18 +196,16 @@ public class BodyLogBoard extends Board{
 
                                     @Override
                                     public void failure(Throwable error) {
-//                                        super.failure(error);
                                         error.printStackTrace();
-                                        first = 0;
+                                        connectionStage = Constants.STAGE.INIT;
                                     }
                                 });
                             }
 
                             @Override
                             public void failure(Throwable error) {
-//                                super.failure(error);
                                 error.printStackTrace();
-                                first = 0;
+                                connectionStage = Constants.STAGE.INIT;
                             }
                         });
 
@@ -241,9 +230,6 @@ public class BodyLogBoard extends Board{
                                                 double ts_in_sec = timestamp / 1000.0;
                                                 String jsonstr = getJSON(devicename, String.format("%.3f", ts_in_sec), String.format("%.3f", message.getData(Float.class)));
                                                 service.resendTempQueue.offer(jsonstr);
-//                                                postTempAsync task = new postTempAsync(service);
-//                                                task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, jsonstr);
-//                                                    task.execute(jsonstr);
                                                 temperature =  String.format("%.3f", message.getData(Float.class));
                                                 Log.i(devicename, jsonstr);
                                                 broadcastStatus();
@@ -255,10 +241,9 @@ public class BodyLogBoard extends Board{
                                 @Override
                                 public void failure(Throwable error) {
                                     error.printStackTrace();
-                                    first = 0;
+                                    connectionStage = Constants.STAGE.INIT;
                                 }
                             });
-//                            mcTempModule.readTemperature(tempSources.get(MultiChannelTemperature.MetaWearProChannel.ON_BOARD_THERMISTOR));
                             board.readBatteryLevel().onComplete(new AsyncOperation.CompletionHandler<Byte>() {
                                 @Override
                                 public void success(Byte result) {
@@ -270,7 +255,7 @@ public class BodyLogBoard extends Board{
                                     batteryTS = System.currentTimeMillis();
                                     if (Integer.valueOf(battery) <= low_battery_thres) {
                                         sensor_status = OUT_OF_BATTERY;
-                                        first = -2;
+                                        connectionStage = Constants.STAGE.OUT_OF_BATTERY;
                                         broadcastStatus();
                                     }
                                 }
@@ -306,7 +291,7 @@ public class BodyLogBoard extends Board{
                         e.printStackTrace();
                     }
                     service.writeSensorLog("Board configured", ForegroundService._info, devicename);
-                } else if (first == 2 || first == 3) {
+                } else if (connectionStage == Constants.STAGE.DOWNLOAD || connectionStage == Constants.STAGE.BACK_IN_RANGE) {
                     try {
                         sensor_status = CONNECTED;
                         Logging logger = board.getModule(Logging.class);
@@ -330,7 +315,7 @@ public class BodyLogBoard extends Board{
                                         service.resendBatteryQueue.offer(jsonstr);
                                         if (Integer.valueOf(battery) <= low_battery_thres) {
                                             sensor_status = OUT_OF_BATTERY;
-                                            first = -2;
+                                            connectionStage = Constants.STAGE.OUT_OF_BATTERY;
                                             broadcastStatus();
                                         }
                                     }
@@ -350,7 +335,9 @@ public class BodyLogBoard extends Board{
                             public void run() {
                                 if (sensor_status.equals(CONNECTED)) {
                                     service.writeSensorLog("Download timed out", ForegroundService._info, devicename);
-//                                    int totalApprox = (int) (total / (((int) (total / 375.0)) * 1.0));
+                                    if (connectionStage == Constants.STAGE.BACK_IN_RANGE) {
+                                        connectionStage = Constants.STAGE.INIT;
+                                    }
                                     if (!datalist.isEmpty()) {
                                         ArrayList<String> data = getFilteredDataCache((ArrayList<Datapoint>) datalist);
                                         if (data.size() > 0) {
@@ -367,6 +354,7 @@ public class BodyLogBoard extends Board{
                                             broadcastStatus();
                                         }
                                     } else {
+                                        datalist.clear();
                                         board.disconnect();
                                         sensor_status = DISCONNECTED_OBJ;
                                         broadcastStatus();
@@ -376,7 +364,6 @@ public class BodyLogBoard extends Board{
                         };
                         timer.schedule(interrupt, Constants.CONFIG.DOWNLOAD_TIMEOUT);
 
-
                         final long remaining_space = logger.getLogCapacity();
                         service.writeSensorLog(" Remaining space: " + remaining_space, ForegroundService._info, devicename);
                         if (remaining_space > 40) {
@@ -384,13 +371,12 @@ public class BodyLogBoard extends Board{
                                 @Override
                                 public void onProgressUpdate(int nEntriesLeft, int totalEntries) {
                                     Log.i("data", String.format("Progress: %d/%d/%d", datalist.size(), totalEntries - nEntriesLeft, totalEntries));
-                                    int expected_N = (int) (totalEntries * datalist.size() / ((totalEntries - nEntriesLeft) * 1.0));
                                     service.writeSensorLog(String.format("Download Progress: %d/%d", totalEntries - nEntriesLeft, totalEntries), ForegroundService._info, devicename);
                                     total = totalEntries;
                                     if (nEntriesLeft == 0) {
                                         Log.i("data", "Download Completed");
                                         lastDownloadTS = dl_TS;
-                                        expected_N = datalist.size();
+//                                        expected_N = datalist.size();
                                         service.writeSensorLog("Download Completed", ForegroundService._success, devicename);
                                         Log.i("data", "Generated " + datalist.size() + " data points");
                                         service.writeSensorLog("Generated " + datalist.size() + " data points", ForegroundService._success, devicename);
@@ -399,11 +385,13 @@ public class BodyLogBoard extends Board{
                                         }
                                         //process listed data
                                         // send to server
-                                        ArrayList<String> data = getFilteredDataCache((ArrayList<Datapoint>) datalist);
-                                        if (data.size() > 0) {
-                                            ArrayList<String> data_array = getJSONList(devicename, data);
-                                            for (String s : data_array) {
-                                                service.resendDataQueue.offer(s);
+                                        if (!datalist.isEmpty()) {
+                                            ArrayList<String> data = getFilteredDataCache((ArrayList<Datapoint>) datalist);
+                                            if (data.size() > 0) {
+                                                ArrayList<String> data_array = getJSONList(devicename, data);
+                                                for (String s : data_array) {
+                                                    service.resendDataQueue.offer(s);
+                                                }
                                             }
                                         }
                                         datalist.clear();
@@ -412,8 +400,8 @@ public class BodyLogBoard extends Board{
                                         }
                                         total = 0;
 
-                                        if (first == 3) {
-                                            first = 0;
+                                        if (connectionStage == Constants.STAGE.BACK_IN_RANGE) {
+                                            connectionStage = Constants.STAGE.INIT;
                                         }
 
                                         timer.schedule(new TimerTask() {
@@ -440,8 +428,8 @@ public class BodyLogBoard extends Board{
                                     Log.i("Data to download", String.valueOf(result));
                                     if (result == 0) {
                                         sensor_status = DISCONNECTED_OBJ;
-                                        if (first == 3) {
-                                            first = 0;
+                                        if (connectionStage == Constants.STAGE.BACK_IN_RANGE) {
+                                            connectionStage = Constants.STAGE.INIT;
                                         }
                                         board.disconnect();
                                         broadcastStatus();
@@ -452,7 +440,7 @@ public class BodyLogBoard extends Board{
                         } else {
                             service.writeSensorLog("No enough space on sensor, Reset", ForegroundService._error, devicename);
                             if (!sensor_status.equals(OUT_OF_BATTERY)) {
-                                first = 1;
+                                connectionStage = Constants.STAGE.CONFIGURE;
                                 board.removeRoutes();
                                 try {
                                     logger = board.getModule(Logging.class);
@@ -480,7 +468,7 @@ public class BodyLogBoard extends Board{
                     } catch (UnsupportedModuleException e) {
                         e.printStackTrace();
                     }
-                } else if (first == -1) {
+                } else if (connectionStage == Constants.STAGE.DESTROY) {
                     destroy();
                     destroyed = true;
                 }
@@ -488,11 +476,10 @@ public class BodyLogBoard extends Board{
 
             @Override
             public void disconnected() {
-                if (first == 1 || first == 0) {
+                if (connectionStage == Constants.STAGE.CONFIGURE || connectionStage == Constants.STAGE.INIT) {
                     TimerTask reconnect_after_reset = new TimerTask() {
                         @Override
                         synchronized public void run() {
-//                                Set<String> nearMW = scanBle(5000);
                             connectionAttemptTS = System.currentTimeMillis();
                             service.writeSensorLog("Try to connect", ForegroundService._info, devicename);
                             board.connect();
@@ -501,7 +488,7 @@ public class BodyLogBoard extends Board{
                     // 30s between Reset and Configuration
                     timer.schedule(reconnect_after_reset, 120000);
                     service.writeSensorLog("Disconnected from the sensor and scheduled next connection in " + 120000 + " ms", ForegroundService._info, devicename);
-                } else if (first == 2) {
+                } else if (connectionStage == Constants.STAGE.DOWNLOAD) {
                     long interval = Constants.CONFIG.BODY_INTERVAL - (System.currentTimeMillis() - connectionAttemptTS) % (Constants.CONFIG.BODY_INTERVAL);
                     TimerTask reconnect = new TimerTask() {
                         @Override
@@ -519,7 +506,7 @@ public class BodyLogBoard extends Board{
 
             @Override
             public void failure(int status, Throwable error) {
-                if (first != -2) {
+                if (connectionStage != Constants.STAGE.OUT_OF_BATTERY) {
                     connectionFailureCount += 1;
                     if (!away && connectionFailureCount <= 5) {
                         if (searchTM != null) {
@@ -552,7 +539,7 @@ public class BodyLogBoard extends Board{
                                     if (away) {
                                         away = false;
                                         scanCount = 0;
-                                        first = 3;
+                                        connectionStage = Constants.STAGE.BACK_IN_RANGE;
                                         board.connect();
                                     } else {
                                         away = false;

@@ -29,7 +29,7 @@ public class ObjectBoard extends Board{
     private final float sampleFreq;
     public String devicename;
     private final String SENSOR_DATA_LOG;
-    private int first = 0;
+    private int connectionStage = Constants.STAGE.INIT;
     private List<Datapoint> datalist = null;
     private int routeID = 0;
     boolean configured = false;
@@ -69,7 +69,7 @@ public class ObjectBoard extends Board{
         @Override
         public void failure(Throwable error) {
             error.printStackTrace();
-            first = 0;
+            connectionStage = Constants.STAGE.INIT;
         }
     };
 
@@ -108,12 +108,12 @@ public class ObjectBoard extends Board{
                 gatt_error = false;
                 connectionFailureCount = 0;
                 service.resendHeartbeatQueue.offer(getJSON(devicename, String.format("%.3f", System.currentTimeMillis()/1000.0)));
-                if (first == 0) {
+                if (connectionStage == Constants.STAGE.INIT) {
                     data_ID = -1;
                     temperature_ID = -1;
                     anymotion_ID = -1;
                     trigger_mode_timer_ID = -1;
-                    first = 1;
+                    connectionStage = Constants.STAGE.CONFIGURE;
                     board.removeRoutes();
                     try {
                         board.getModule(Settings.class)
@@ -144,8 +144,8 @@ public class ObjectBoard extends Board{
                     broadcastStatus();
                     service.writeSensorLog("Board Initialized", ForegroundService._info, devicename);
 //                    board.disconnect();
-                } else if (first == 1) {
-                    first = 2;
+                } else if (connectionStage == Constants.STAGE.CONFIGURE) {
+                    connectionStage = Constants.STAGE.DOWNLOAD;
                     try {
                         Logging logger = board.getModule(Logging.class);
                         logger.startLogging(true);
@@ -187,7 +187,7 @@ public class ObjectBoard extends Board{
                                     public void failure(Throwable error) {
 //                                        super.failure(error);
                                         error.printStackTrace();
-                                        first = 0;
+                                        connectionStage = Constants.STAGE.INIT;
                                     }
                                 });
                             }
@@ -196,7 +196,7 @@ public class ObjectBoard extends Board{
                             public void failure(Throwable error) {
 //                                super.failure(error);
                                 error.printStackTrace();
-                                first = 0;
+                                connectionStage = Constants.STAGE.INIT;
                             }
                         });
 
@@ -236,7 +236,7 @@ public class ObjectBoard extends Board{
                                 @Override
                                 public void failure(Throwable error) {
                                     error.printStackTrace();
-                                    first = 0;
+                                    connectionStage = Constants.STAGE.INIT;
                                 }
                             });
 //                            mcTempModule.readTemperature(tempSources.get(MultiChannelTemperature.MetaWearProChannel.ON_BOARD_THERMISTOR));
@@ -248,10 +248,10 @@ public class ObjectBoard extends Board{
                                     Log.i("battery", battery);
                                     String jsonstr = getJSON(devicename, String.format("%.3f", System.currentTimeMillis() / 1000.0), Integer.valueOf(battery));
                                     service.resendBatteryQueue.offer(jsonstr);
-
+                                    batteryTS = System.currentTimeMillis();
                                     if (Integer.valueOf(battery) <= low_battery_thres) {
                                         sensor_status = OUT_OF_BATTERY;
-                                        first = -2;
+                                        connectionStage = Constants.STAGE.OUT_OF_BATTERY;
                                         broadcastStatus();
                                     }
                                 }
@@ -292,7 +292,7 @@ public class ObjectBoard extends Board{
                         e.printStackTrace();
                     }
                     service.writeSensorLog("Board configured", ForegroundService._info, devicename);
-                } else if (first == 2) {
+                } else if (connectionStage == Constants.STAGE.DOWNLOAD) {
                     try {
                         sensor_status = CONNECTED;
                         final Logging logger = board.getModule(Logging.class);
@@ -316,7 +316,7 @@ public class ObjectBoard extends Board{
                                         service.resendBatteryQueue.offer(jsonstr);
                                         if (Integer.valueOf(battery) <= low_battery_thres) {
                                             sensor_status = OUT_OF_BATTERY;
-                                            first = -2;
+                                            connectionStage = Constants.STAGE.OUT_OF_BATTERY;
                                             broadcastStatus();
                                         }
                                     }
@@ -433,7 +433,7 @@ public class ObjectBoard extends Board{
                     } catch (UnsupportedModuleException e) {
                         e.printStackTrace();
                     }
-                } else if (first == -1) {
+                } else if (connectionStage == Constants.STAGE.DESTROY) {
                     destroy();
                     destroyed = true;
                 }
@@ -441,7 +441,7 @@ public class ObjectBoard extends Board{
 
             @Override
             public void disconnected() {
-                if (first >= 0) {
+                if (connectionStage >= Constants.STAGE.INIT) {
                     long interval = Constants.CONFIG.OBJECT_INTERVAL - (System.currentTimeMillis() - connectionAttemptTS) % Constants.CONFIG.OBJECT_INTERVAL;
                     TimerTask reconnect = new TimerTask() {
                         @Override
@@ -459,9 +459,9 @@ public class ObjectBoard extends Board{
 
             @Override
             public void failure(int status, Throwable error) {
-                if (first == -2) {
+                if (connectionStage == Constants.STAGE.OUT_OF_BATTERY) {
 
-                } else if (first != -1) {
+                } else if (connectionStage != Constants.STAGE.DESTROY) {
                     error.printStackTrace();
                     service.writeSensorLog(error.getMessage(), ForegroundService._error, devicename);
                     sensor_status = FAILURE;

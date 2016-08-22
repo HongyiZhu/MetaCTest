@@ -86,11 +86,11 @@ public class MyAsyncTask extends AsyncTask<String, Boolean, String> {
                         // Drop data if duplicated entries found
                         service.sendJobSet.remove(params[0]);
                         service.writeSensorLog("Database error: dropped:  " + params[0], ForegroundService._error);
-                    } else if (response >= 500) {
-                        // Drop data to reduce server load
-                        service.sendJobSet.remove(params[0]);
-                        service.writeSensorLog("Server error: dropped:  " + params[0], ForegroundService._error);
-                    }else {
+//                    } else if (response >= 500) {
+//                        // Drop data to reduce server load
+//                        service.sendJobSet.remove(params[0]);
+//                        service.writeSensorLog("Server error: dropped:  " + params[0], ForegroundService._error);
+                    } else {
                         Log.e(ForegroundService.LOG_ERR, "Post error code: " + response + " " + params[0]);
                         switch (request) {
                             case "heartbeat":
