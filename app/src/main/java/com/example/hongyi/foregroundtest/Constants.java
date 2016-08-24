@@ -25,6 +25,7 @@ public class Constants {
         int CONFIGURE = 1;
         int DOWNLOAD = 2;
         int BACK_IN_RANGE = 3;
+        int STREAMING = 4;
         int DESTROY = -1;
         int OUT_OF_BATTERY = -2;
     }
