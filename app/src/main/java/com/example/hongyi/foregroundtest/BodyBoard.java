@@ -176,6 +176,7 @@ public class BodyBoard extends Board{
                                         }
                                     }
                                 }
+                                broadcastStatus();
                             }
                         };
 
