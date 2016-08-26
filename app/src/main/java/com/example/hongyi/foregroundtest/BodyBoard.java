@@ -166,9 +166,10 @@ public class BodyBoard extends Board{
                         TimerTask uploadData = new TimerTask(){
                             @Override
                             public void run() {
-                                if (!datalist.isEmpty()) {
-                                    ArrayList<String> data = getFilteredDataCache((ArrayList<Datapoint>) datalist);
-                                    datalist.clear();
+                                List<Datapoint> temp = new ArrayList<Datapoint>(datalist);
+                                datalist.clear();
+                                if (!temp.isEmpty()) {
+                                    ArrayList<String> data = getFilteredDataCache((ArrayList<Datapoint>) temp);
                                     if (data.size() > 0) {
                                         ArrayList<String> data_array = getJSONList(devicename, data);
                                         for (String s : data_array) {
@@ -343,8 +344,8 @@ public class BodyBoard extends Board{
                         }
                     };
                     // 30s between Reset and Configuration
-                    timer.schedule(reconnect_after_reset, 120000);
-                    service.writeSensorLog("Disconnected from the sensor and scheduled next connection in " + 120000 + " ms", ForegroundService._info, devicename);
+                    timer.schedule(reconnect_after_reset, 30000);
+                    service.writeSensorLog("Disconnected from the sensor and scheduled next connection in " + 30000 + " ms", ForegroundService._info, devicename);
                 }
             }
 
