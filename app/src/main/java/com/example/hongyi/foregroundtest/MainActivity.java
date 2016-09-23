@@ -1,5 +1,6 @@
 package com.example.hongyi.foregroundtest;
 
+import android.app.Application;
 import android.app.DownloadManager;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -24,6 +25,7 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import org.acra.annotation.ReportsCrashes;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -33,6 +35,7 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -42,12 +45,11 @@ import java.io.OutputStreamWriter;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.ProtocolException;
+import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.text.SimpleDateFormat;
 
 import static com.example.hongyi.foregroundtest.ForegroundService.*;
-
-//Todo: 2. Test new version
 
 public class MainActivity extends AppCompatActivity{
     private MyReceiver broadcastreceiver;
@@ -55,6 +57,7 @@ public class MainActivity extends AppCompatActivity{
     long download_id;
     String phoneID;
     String versionName;
+    String configString;
 
     public class MyReceiver extends BroadcastReceiver {
         private String lb_MAC = "MAC";
@@ -146,6 +149,26 @@ public class MainActivity extends AppCompatActivity{
         return false;
     }
 
+    private String getConfigString() {
+        String jsonstr = null;
+
+        String address = (getApplicationContext().getExternalFilesDirs("")[0].getAbsolutePath()).contains("external_SD") ? getApplicationContext().getExternalFilesDirs("")[1].getAbsolutePath() : getApplicationContext().getExternalFilesDirs("")[0].getAbsolutePath();
+        File config_file = new File(address, "config.ini");
+        if (config_file.getAbsoluteFile().exists()) {
+            BufferedReader br = null;
+            try {
+                br = new BufferedReader(new InputStreamReader(new FileInputStream(config_file)));
+                jsonstr = br.readLine();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        } else {
+
+            Toast.makeText(getApplicationContext(), "Cannot read the config file", Toast.LENGTH_LONG).show();
+        }
+
+        return jsonstr;
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -154,6 +177,7 @@ public class MainActivity extends AppCompatActivity{
         Log.i("phoneID", phoneID);
         // get version name
         PackageInfo pinfo;
+        configString = getConfigString();
         try {
             pinfo = getPackageManager().getPackageInfo(getPackageName(), 0);
             versionName = pinfo.versionName;
@@ -267,6 +291,8 @@ public class MainActivity extends AppCompatActivity{
                 public void run() {
                     phoneID = ((TelephonyManager) getSystemService(TELEPHONY_SERVICE)).getDeviceId();
                     Log.i("phoneID", phoneID);
+                    String local_config = configString;
+                    String jsonstr = null;
 
                     URL url;
                     HttpURLConnection connection = null;
@@ -279,6 +305,8 @@ public class MainActivity extends AppCompatActivity{
                         connection.setDoOutput(true);
                         connection.setDoInput(true);
                         connection.setUseCaches(false);
+                        connection.setReadTimeout(10000);
+                        connection.setConnectTimeout(5000);
                         connection.setInstanceFollowRedirects(true);
                         connection.setRequestProperty("connection", "close");
 
@@ -294,18 +322,10 @@ public class MainActivity extends AppCompatActivity{
 
                             int response = connection.getResponseCode();
                             Log.i("HTTP", String.valueOf(response));
-                            String jsonstr = "";
 
                             // In case the app cannot reach the server
                             if (response != HttpURLConnection.HTTP_OK) {
-                                String address = (getApplicationContext().getExternalFilesDirs("")[0].getAbsolutePath()).contains("external_SD") ? getApplicationContext().getExternalFilesDirs("")[1].getAbsolutePath() : getApplicationContext().getExternalFilesDirs("")[0].getAbsolutePath();
-                                File config_file = new File(address, "config.ini");
-                                if (config_file.getAbsoluteFile().exists()) {
-                                    BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(config_file)));
-                                    jsonstr = br.readLine();
-                                } else {
-                                    Toast.makeText(getApplicationContext(), "Cannot read the config file", Toast.LENGTH_LONG).show();
-                                }
+                                jsonstr = local_config;
                             } else {
                                 InputStream in = new BufferedInputStream(connection.getInputStream());
                                 StringBuilder sb = new StringBuilder();
@@ -317,24 +337,32 @@ public class MainActivity extends AppCompatActivity{
                                 }
                                 jsonstr = sb.toString();
                             }
-                            android.os.Message msg = android.os.Message.obtain();
-                            msg.obj = jsonstr;
-                            msg.setTarget(mHandler);
-                            msg.sendToTarget();
                         } catch (IOException e) {
                             Log.e("http_err", "IOException with .connect()");
+                            jsonstr = local_config;
                             e.printStackTrace();
                         } finally {
                             connection.disconnect();
                         }
                     } catch (MalformedURLException e) {
+                        jsonstr = local_config;
                         e.printStackTrace();
                     } catch (ProtocolException e) {
                         Log.e("http_err", "ProtocolException");
+                        jsonstr = local_config;
                         e.printStackTrace();
+                    } catch (SocketTimeoutException e) {
+                        jsonstr = local_config;
                     } catch (IOException e) {
                         Log.e("http_err", "IOException");
+                        jsonstr = local_config;
                         e.printStackTrace();
+                    }
+                    android.os.Message msg = android.os.Message.obtain();
+                    if (!jsonstr.isEmpty()) {
+                        msg.obj = jsonstr;
+                        msg.setTarget(mHandler);
+                        msg.sendToTarget();
                     }
                 }
             };

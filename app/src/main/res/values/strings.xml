@@ -13,4 +13,5 @@
     <string name="message_wait">Please wait</string>
     <string name="title_connecting">Preparing</string>
     <string name="label_cancel">Cancel</string>
+    <string name="crash">App crashed\nCrash report Sent</string>
 </resources>
