@@ -10,7 +10,7 @@ public class Constants {
         int OBJECT_MINUTE_INTERVAL = 4;
         long SEARCH_BLE_DEVICE_INTERVAL = 1000 * 60 * 2;
         long ROTATION_MS = 1000 * 60 * 4;
-        long DOWNLOAD_TIMEOUT = 1000 * 30;
+        long DOWNLOAD_TIMEOUT = 1000 * 40;
         long BATTERY_INTERVAL = 1000 * 60 * 60;
         long TEMPERATURE_INTERVAL = 1000 * 60 * 15;
         long WAIT_AFTER_CONFIGURATION = 1000 * 10;

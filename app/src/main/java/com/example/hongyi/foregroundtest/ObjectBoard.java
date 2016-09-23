@@ -338,14 +338,15 @@ public class ObjectBoard extends Board{
                                     service.writeSensorLog("Download timed out", ForegroundService._info, devicename);
                                     int totalApprox = (int) (total / (((int) (total / 375.0)) * 1.0));
                                     if (!datalist.isEmpty()) {
-                                        ArrayList<String> data = getFilteredDataCache((ArrayList<Datapoint>) datalist);
+                                        List<Datapoint> temp = new ArrayList<>(datalist);
+                                        datalist.clear();
+                                        ArrayList<String> data = getFilteredDataCache((ArrayList<Datapoint>) temp);
                                         if (data.size() > 0) {
                                             ArrayList<String> data_array = getJSONList(devicename, data);
                                             for (String s : data_array) {
                                                 service.resendDataQueue.offer(s);
                                             }
                                         }
-                                        datalist.clear();
                                         total = 0;
                                         board.disconnect();
                                         if (!sensor_status.equals(OUT_OF_BATTERY)) {
