@@ -384,7 +384,9 @@ public class ObjectBoard extends Board{
                                     //process listed data
                                     // send to server
                                     if (!datalist.isEmpty()) {
-                                        ArrayList<String> data = getFilteredDataCache((ArrayList<Datapoint>)datalist);
+                                        ArrayList<Datapoint> temp = new ArrayList<>(datalist);
+                                        datalist.clear();
+                                        ArrayList<String> data = getFilteredDataCache((ArrayList<Datapoint>) temp);
                                         if (data.size() > 0) {
                                             ArrayList<String> data_array = getJSONList(devicename, data);
                                             for (String s : data_array) {
@@ -392,7 +394,6 @@ public class ObjectBoard extends Board{
                                             }
                                         }
                                     }
-                                    datalist.clear();
                                     if (!sensor_status.equals(OUT_OF_BATTERY)) {
                                         sensor_status = DOWNLOAD_COMPLETED;
                                     }
