@@ -116,7 +116,7 @@ public class MyAsyncTask extends AsyncTask<String, Boolean, String> {
             } catch (IOException e) {
                 // Catch Wifi error
                 Log.e(ForegroundService.LOG_ERR, "Connection error " + e.getMessage() + " " + params[0]);
-                if (need_to_drop(e.getMessage())) {
+                if (e.getMessage() != null && need_to_drop(e.getMessage())) {
                     service.sendJobSet.remove(params[0]);
                     service.writeSensorLog("Connection error: " + e.getMessage() + ", dropped:  " + params[0], ForegroundService._error);
 //                service.writeSensorLog("Connection error: " + e.getMessage() + " " + params[0], ForegroundService._error);
