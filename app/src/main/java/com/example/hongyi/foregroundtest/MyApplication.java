@@ -22,7 +22,8 @@ import org.acra.annotation.ReportsCrashes;
                 ReportField.STACK_TRACE, ReportField.DEVICE_ID, ReportField.APP_VERSION_CODE, ReportField.APP_VERSION_NAME,
                 ReportField.CRASH_CONFIGURATION, ReportField.USER_CRASH_DATE, ReportField.PACKAGE_NAME, ReportField.BUILD,
                 ReportField.BUILD_CONFIG, ReportField.DISPLAY, ReportField.LOGCAT,
-        }
+        },
+        logcatArguments = {"-t", "200", "-v", "time", "*:I"}
 )
 public class MyApplication extends Application {
     @Override
