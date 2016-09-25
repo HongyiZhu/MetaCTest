@@ -34,6 +34,9 @@ public class MyAsyncTask extends AsyncTask<String, Boolean, String> {
 
     private boolean need_to_drop(String message) {
         if (message.contains("DNS") || message.contains("unreachable") || message.contains("resolve")) {
+            if (!service.wifiReset_report) {
+                service.wifiReset_report = true;
+            }
             return true;
         }
         return false;
@@ -136,9 +139,6 @@ public class MyAsyncTask extends AsyncTask<String, Boolean, String> {
                             service.resendBatteryQueue.offer(params[0]);
                             break;
                     }
-                }
-                if (e.getMessage().contains("") && !service.wifiReset_report) {
-                    service.wifiReset_report = true;
                 }
             }
         } else {

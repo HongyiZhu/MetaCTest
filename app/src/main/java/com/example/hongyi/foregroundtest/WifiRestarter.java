@@ -17,5 +17,6 @@ public class WifiRestarter {
         WifiManager wm = (WifiManager) service.getSystemService(Context.WIFI_SERVICE);
         wm.disconnect();
         wm.reconnect();
+        service.wifiReset_report = false;
     }
 }
