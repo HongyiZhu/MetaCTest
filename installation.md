@@ -8,11 +8,11 @@
 3. Click on '**Apps**'->'**Settings**'->'**Wi-Fi**', tap the '**Menu**' button to the right of the '**Home**' button and select '**Advanced Wi-Fi**'. Uncheck '**Battery saving for Wi-Fi**.'
 
 ### Root the gateway
-1. Downlaod [TowelRoot](https://raw.github.com/HongyiZhu/MetaCTest/master/app/tr.apk).
+1. Download [TowelRoot](https://raw.github.com/HongyiZhu/MetaCTest/master/app/tr.apk).
 2. Install the application and ignore the warning. Finish the installation and open the application.
 3. Tap the <span style="color:red">**RED**</span> ***"V3"*** on the title for *3* times. A text field will show up and change the numbers `0 1 0` to `0 0 0`. Then click on the button.
 4. If the text suggests the phone is rooted, download [SuperSU](https://raw.github.com/HongyiZhu/MetaCTest/master/app/su.apk), open and upgrade the application after installaton. Please **DON'T** restart the phone.
-5. Seletct the 'Setting' tag.
+5. Select the 'Setting' tag.
 	+ Uncheck '**Re-authentication**'
 	+ Select and change '**default access**' to **Grant**
 	+ Uncheck '**Show notifications**'
@@ -42,7 +42,8 @@
 2. Reboot the gateway and select 'MTP' mode on the gateway
 3. Find the log files on the device under folder: <br/>`LGL34C/Internal Storage/Android/data/com.example.hongyi.foregroundtest/files/logs/`.
 
-### Update sensor firmwear
+### Update sensor firmware
 1. Open '**Apps**'->'**Metawear**', select the sensor to be updated.
-2. Connect to the sensor and click on 'Update Firmwear'.
+2. Connect to the sensor and click on 'Update Firmware'.
 3. After update, disconnect from the sensor.
+4. To upgrade to the latest version of MetaWear app, please download [MetaWear](https://raw.github.com/HongyiZhu/MetaCTest/master/app/mw.apk). 
