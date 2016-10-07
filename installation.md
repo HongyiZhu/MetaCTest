@@ -47,3 +47,4 @@
 2. Connect to the sensor and click on 'Update Firmware'.
 3. After update, disconnect from the sensor.
 4. To upgrade to the latest version of MetaWear app, please download [MetaWear](https://raw.github.com/HongyiZhu/MetaCTest/master/app/mw.apk). 
+5. If you would like to upgrade firmware manually, you can download [v1.1.3](https://raw.github.com/HongyiZhu/MetaCTest/master/app/firmware(1.1.3).hex) or [v1.2.1](https://raw.github.com/HongyiZhu/MetaCTest/master/app/firmware(1.2.1).hex).
