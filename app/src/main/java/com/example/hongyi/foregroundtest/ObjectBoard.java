@@ -118,8 +118,13 @@ public class ObjectBoard extends Board{
                     try {
                         board.getModule(Settings.class)
                                 .configureConnectionParameters()
+                                .setMinConnectionInterval((float) 7.5)
                                 .setMaxConnectionInterval(40.f)
                                 .setSlaveLatency((short) 1)
+                                .commit();
+                        board.getModule(Settings.class)
+                                .configure()
+                                .setAdInterval((short) 417, (byte) 0)
                                 .commit();
                     } catch (UnsupportedModuleException e) {
                         e.printStackTrace();
@@ -266,6 +271,10 @@ public class ObjectBoard extends Board{
                                     .configureConnectionParameters()
                                     .setMaxConnectionInterval(100.f)
                                     .setSlaveLatency((short) 20)
+                                    .commit();
+                            board.getModule(Settings.class)
+                                    .configure()
+                                    .setAdInterval((short) 1500, (byte) 0)
                                     .commit();
                         } catch (UnsupportedModuleException e) {
                             e.printStackTrace();

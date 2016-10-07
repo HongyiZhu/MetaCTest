@@ -6,6 +6,10 @@ import android.util.Log;
 import com.mbientlab.metawear.MetaWearBoard;
 import com.mbientlab.metawear.data.CartesianFloat;
 import com.mbientlab.metawear.module.Bmi160Accelerometer;
+import com.mbientlab.metawear.module.Led;
+import com.mbientlab.metawear.module.Macro;
+import com.mbientlab.metawear.module.Settings;
+import com.mbientlab.metawear.module.Switch;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -21,9 +25,14 @@ public class Board {
     public int temperature_ID;
     public int anymotion_ID;
     public int trigger_mode_timer_ID;
+    public byte macro_ID;
     public ForegroundService service;
     public MetaWearBoard board;
+    public Switch switch_module;
     public Bmi160Accelerometer accel_module;
+    public Settings settings_module;
+    public Macro macro_module;
+    public Led led_module;
     public com.mbientlab.metawear.module.Timer timerModule;
     public String sensor_status;
     public boolean ActiveDisconnect = false;

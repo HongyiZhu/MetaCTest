@@ -12,9 +12,12 @@ import com.mbientlab.metawear.data.CartesianFloat;
 import com.mbientlab.metawear.module.Bmi160Accelerometer;
 import com.mbientlab.metawear.module.DataProcessor;
 import com.mbientlab.metawear.module.Debug;
+import com.mbientlab.metawear.module.Led;
 import com.mbientlab.metawear.module.Logging;
+import com.mbientlab.metawear.module.Macro;
 import com.mbientlab.metawear.module.MultiChannelTemperature;
 import com.mbientlab.metawear.module.Settings;
+import com.mbientlab.metawear.module.Switch;
 
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -132,8 +135,13 @@ public class BodyLogBoard extends Board{
                     try {
                         board.getModule(Settings.class)
                                 .configureConnectionParameters()
+                                .setMinConnectionInterval((float)7.5)
                                 .setMaxConnectionInterval(40.f)
                                 .setSlaveLatency((short) 1)
+                                .commit();
+                        board.getModule(Settings.class)
+                                .configure()
+                                .setAdInterval((short) 417, (byte) 0)
                                 .commit();
                     } catch (UnsupportedModuleException e) {
                         e.printStackTrace();
@@ -162,6 +170,41 @@ public class BodyLogBoard extends Board{
                         logger.startLogging(true);
 
                         accel_module = board.getModule(Bmi160Accelerometer.class);
+                        switch_module = board.getModule(Switch.class);
+                        led_module = board.getModule(Led.class);
+                        settings_module = board.getModule(Settings.class);
+                        macro_module = board.getModule(Macro.class);
+
+                        macro_module.record(new Macro.CodeBlock() {
+                            @Override
+                            public void commands() {
+                                settings_module.configure().setDeviceName("SOS").commit();
+                            }
+
+                            @Override
+                            public boolean execOnBoot() {
+                                return false;
+                            }
+                        }).onComplete(new AsyncOperation.CompletionHandler<Byte>() {
+                            @Override
+                            public void success(Byte result) {
+                                macro_ID = result;
+                            }
+
+                            @Override
+                            public void failure(Throwable error) {
+                                error.printStackTrace();
+                                connectionStage = Constants.STAGE.INIT;
+                            }
+                        });
+
+                        led_module.configureColorChannel(Led.ColorChannel.RED)
+                                .setHighIntensity((byte) 31)
+                                .setPulseDuration((short) 2000)
+                                .setHighTime((short) 1500)
+                                .setRiseTime((short) 0)
+                                .setFallTime((short) 0)
+                                .commit();
 
                         timerModule = board.getModule(com.mbientlab.metawear.module.Timer.class);
 
@@ -264,12 +307,36 @@ public class BodyLogBoard extends Board{
                             e.printStackTrace();
                         }
 
+                        switch_module.routeData().fromSensor().monitor(new DataSignal.ActivityHandler() {
+                            @Override
+                            public void onSignalActive(Map<String, DataProcessor> map, DataSignal.DataToken dataToken) {
+                                macro_module.execute(macro_ID);
+                                led_module.play(true);
+                            }
+                        }).commit();
+//                                .onComplete(new AsyncOperation.CompletionHandler<RouteManager>() {
+//                            @Override
+//                            public void success(RouteManager result) {
+//                                Log.i("SOS Route", String.valueOf(result.id()));
+//                            }
+//
+//                            @Override
+//                            public void failure(Throwable error) {
+//                                error.printStackTrace();
+//                                connectionStage = Constants.STAGE.INIT;
+//                            }
+//                        });
+
                         // set board connection configure
                         try {
                             board.getModule(Settings.class)
                                     .configureConnectionParameters()
                                     .setMaxConnectionInterval(100.f)
                                     .setSlaveLatency((short) 20)
+                                    .commit();
+                            board.getModule(Settings.class)
+                                    .configure()
+                                    .setAdInterval((short) 1500, (byte) 0)
                                     .commit();
                         } catch (UnsupportedModuleException e) {
                             e.printStackTrace();
@@ -536,7 +603,7 @@ public class BodyLogBoard extends Board{
                         searchTM.schedule(new TimerTask() {
                             @Override
                             public void run() {
-                                Set<String> nearMW = service.scanBle(8000);
+                                Set<String> nearMW = service.scanBle(15000);
                                 if (nearMW.contains(service.getSensors(0))) {
                                     if (away) {
                                         away = false;
