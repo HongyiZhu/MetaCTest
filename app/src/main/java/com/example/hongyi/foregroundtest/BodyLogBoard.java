@@ -110,10 +110,12 @@ public class BodyLogBoard extends Board{
         this.needs_to_reboot = false;
         this.gatt_error = false;
         this.away = false;
+        this.confirmReconnect = false;
 
         this.board.setConnectionStateHandler(new MyMetaWearBoardConnectionStateHandler(service) {
             @Override
             public void connected() {
+                confirmReconnect = true;
                 gatt_error = false;
                 needs_to_reboot = false;
                 scanCount = 0;
@@ -174,37 +176,6 @@ public class BodyLogBoard extends Board{
                         led_module = board.getModule(Led.class);
                         settings_module = board.getModule(Settings.class);
                         macro_module = board.getModule(Macro.class);
-
-                        macro_module.record(new Macro.CodeBlock() {
-                            @Override
-                            public void commands() {
-                                settings_module.configure().setDeviceName("SOS").commit();
-                            }
-
-                            @Override
-                            public boolean execOnBoot() {
-                                return false;
-                            }
-                        }).onComplete(new AsyncOperation.CompletionHandler<Byte>() {
-                            @Override
-                            public void success(Byte result) {
-                                macro_ID = result;
-                            }
-
-                            @Override
-                            public void failure(Throwable error) {
-                                error.printStackTrace();
-                                connectionStage = Constants.STAGE.INIT;
-                            }
-                        });
-
-                        led_module.configureColorChannel(Led.ColorChannel.RED)
-                                .setHighIntensity((byte) 31)
-                                .setPulseDuration((short) 2000)
-                                .setHighTime((short) 1500)
-                                .setRiseTime((short) 0)
-                                .setFallTime((short) 0)
-                                .commit();
 
                         timerModule = board.getModule(com.mbientlab.metawear.module.Timer.class);
 
@@ -307,17 +278,44 @@ public class BodyLogBoard extends Board{
                             e.printStackTrace();
                         }
 
-                        switch_module.routeData().fromSensor().monitor(new DataSignal.ActivityHandler() {
-                            @Override
-                            public void onSignalActive(Map<String, DataProcessor> map, DataSignal.DataToken dataToken) {
-                                macro_module.execute(macro_ID);
-                                led_module.play(true);
-                            }
-                        }).commit();
-//                                .onComplete(new AsyncOperation.CompletionHandler<RouteManager>() {
+//                        macro_module.record(new Macro.CodeBlock() {
 //                            @Override
-//                            public void success(RouteManager result) {
-//                                Log.i("SOS Route", String.valueOf(result.id()));
+//                            public void commands() {
+//                                switch_module.routeData().fromSensor().monitor(new DataSignal.ActivityHandler() {
+//                                    @Override
+//                                    public void onSignalActive(Map<String, DataProcessor> map, DataSignal.DataToken dataToken) {
+//                                        settings_module.configure().setDeviceName("SOS").commit();
+//                                        led_module.configureColorChannel(Led.ColorChannel.RED)
+//                                                .setHighIntensity((byte) 31)
+//                                                .setPulseDuration((short) 2000)
+//                                                .setHighTime((short) 1500)
+//                                                .setRiseTime((short) 0)
+//                                                .setFallTime((short) 0)
+//                                                .commit();
+//                                        led_module.play(true);
+//                                    }
+//                                }).commit().onComplete(new AsyncOperation.CompletionHandler<RouteManager>() {
+//                                    @Override
+//                                    public void success(RouteManager result) {
+//                                        Log.i("SOS Route", String.valueOf(result.id()));
+//                                    }
+//
+//                                    @Override
+//                                    public void failure(Throwable error) {
+//                                        error.printStackTrace();
+//                                        connectionStage = Constants.STAGE.INIT;
+//                                    }
+//                                });
+//                            }
+//
+//                            @Override
+//                            public boolean execOnBoot() {
+//                                return false;
+//                            }
+//                        }).onComplete(new AsyncOperation.CompletionHandler<Byte>() {
+//                            @Override
+//                            public void success(Byte result) {
+//                                macro_ID = result;
 //                            }
 //
 //                            @Override
@@ -326,6 +324,7 @@ public class BodyLogBoard extends Board{
 //                                connectionStage = Constants.STAGE.INIT;
 //                            }
 //                        });
+
 
                         // set board connection configure
                         try {
@@ -545,36 +544,69 @@ public class BodyLogBoard extends Board{
 
             @Override
             public void disconnected() {
-                if (connectionStage == Constants.STAGE.CONFIGURE || connectionStage == Constants.STAGE.INIT) {
-                    TimerTask reconnect_after_reset = new TimerTask() {
-                        @Override
-                        synchronized public void run() {
-                            connectionAttemptTS = System.currentTimeMillis();
-                            service.writeSensorLog("Try to connect", ForegroundService._info, devicename);
+//                if (connectionStage == Constants.STAGE.CONFIGURE || connectionStage == Constants.STAGE.INIT) {
+//                    TimerTask reconnect_after_reset = new TimerTask() {
+//                        @Override
+//                        synchronized public void run() {
+//                            connectionAttemptTS = System.currentTimeMillis();
+//                            service.writeSensorLog("Try to connect", ForegroundService._info, devicename);
+//                            board.connect();
+//                        }
+//                    };
+//                    // 30s between Reset and Configuration
+//                    timer.schedule(reconnect_after_reset, 120000);
+//                    service.writeSensorLog("Disconnected from the sensor and scheduled next connection in " + 120000 + " ms", ForegroundService._info, devicename);
+//                } else if (connectionStage == Constants.STAGE.DOWNLOAD) {
+//                    long interval = Constants.CONFIG.BODY_INTERVAL - (System.currentTimeMillis() - connectionAttemptTS) % (Constants.CONFIG.BODY_INTERVAL);
+//                    TimerTask reconnect = new TimerTask() {
+//                        @Override
+//                        synchronized public void run() {
+//                            connectionAttemptTS = System.currentTimeMillis();
+//                            service.writeSensorLog("Try to connect", ForegroundService._info, devicename);
+//                            board.connect();
+//                        }
+//                    };
+//                    // 2 mins' reconnection
+//                    timer.schedule(reconnect, interval);
+//                    service.writeSensorLog("Disconnected from the sensor and scheduled next connection in " + interval + " ms", ForegroundService._info, devicename);
+//                }
+                long interval = Constants.CONFIG.BODY_INTERVAL - (System.currentTimeMillis() - connectionAttemptTS) % (Constants.CONFIG.BODY_INTERVAL);
+                TimerTask reconnect = new TimerTask() {
+                    @Override
+                    synchronized public void run() {
+                        connectionAttemptTS = System.currentTimeMillis();
+                        service.writeSensorLog("Try to connect", ForegroundService._info, devicename);
+                        confirmReconnect = false;
+                        try {
                             board.connect();
+                        } catch (Exception e) {
+                            service.writeSensorLog(e.getMessage(), ForegroundService._info, devicename);
                         }
-                    };
-                    // 30s between Reset and Configuration
-                    timer.schedule(reconnect_after_reset, 120000);
-                    service.writeSensorLog("Disconnected from the sensor and scheduled next connection in " + 120000 + " ms", ForegroundService._info, devicename);
-                } else if (connectionStage == Constants.STAGE.DOWNLOAD) {
-                    long interval = Constants.CONFIG.BODY_INTERVAL - (System.currentTimeMillis() - connectionAttemptTS) % (Constants.CONFIG.BODY_INTERVAL);
-                    TimerTask reconnect = new TimerTask() {
-                        @Override
-                        synchronized public void run() {
-                            connectionAttemptTS = System.currentTimeMillis();
-                            service.writeSensorLog("Try to connect", ForegroundService._info, devicename);
-                            board.connect();
+                        for (int i = 0; i < 3; i++) {
+                            try {
+                                Thread.sleep(15000);
+                                if (!confirmReconnect) {
+                                    board.connect();
+                                } else {
+                                    break;
+                                }
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                            }
                         }
-                    };
-                    // 2 mins' reconnection
-                    timer.schedule(reconnect, interval);
-                    service.writeSensorLog("Disconnected from the sensor and scheduled next connection in " + interval + " ms", ForegroundService._info, devicename);
-                }
+                        if (!confirmReconnect) {
+                            needs_to_reboot = true;
+                        }
+                    }
+                };
+                // 2 mins' reconnection
+                timer.schedule(reconnect, interval);
+                service.writeSensorLog("Disconnected from the sensor and scheduled next connection in " + interval + " ms", ForegroundService._info, devicename);
             }
 
             @Override
             public void failure(int status, Throwable error) {
+                confirmReconnect = true;
                 if (connectionStage != Constants.STAGE.OUT_OF_BATTERY) {
                     connectionFailureCount += 1;
                     if (!away && connectionFailureCount <= 5) {
@@ -608,7 +640,9 @@ public class BodyLogBoard extends Board{
                                     if (away) {
                                         away = false;
                                         scanCount = 0;
-                                        connectionStage = Constants.STAGE.BACK_IN_RANGE;
+                                        if (connectionStage == Constants.STAGE.DOWNLOAD) {
+                                            connectionStage = Constants.STAGE.BACK_IN_RANGE;
+                                        }
                                         board.connect();
                                     } else {
                                         away = false;

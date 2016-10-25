@@ -26,6 +26,7 @@ public class Board {
     public int anymotion_ID;
     public int trigger_mode_timer_ID;
     public byte macro_ID;
+    public boolean confirmReconnect;
     public ForegroundService service;
     public MetaWearBoard board;
     public Switch switch_module;

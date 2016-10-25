@@ -100,10 +100,12 @@ public class ObjectBoard extends Board{
         this.datalist = new ArrayList<>();
         this.needs_to_reboot = false;
         this.gatt_error = false;
+        this.confirmReconnect = true;
 
         this.board.setConnectionStateHandler(new MyMetaWearBoardConnectionStateHandler(service) {
             @Override
             public void connected() {
+                confirmReconnect = true;
                 needs_to_reboot = false;
                 gatt_error = false;
                 connectionFailureCount = 0;
@@ -461,6 +463,7 @@ public class ObjectBoard extends Board{
                             connectionAttemptTS = System.currentTimeMillis();
                             service.writeSensorLog("Try to connect", ForegroundService._info, devicename);
                             board.connect();
+                            // ToDo: Figure out how to monitor this connect
                         }
                     };
                     timer.schedule(reconnect, interval);
@@ -470,6 +473,7 @@ public class ObjectBoard extends Board{
 
             @Override
             public void failure(int status, Throwable error) {
+                confirmReconnect = true;
                 if (connectionStage == Constants.STAGE.OUT_OF_BATTERY) {
 
                 } else if (connectionStage != Constants.STAGE.DESTROY) {
