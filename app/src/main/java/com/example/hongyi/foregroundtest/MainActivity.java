@@ -152,7 +152,12 @@ public class MainActivity extends AppCompatActivity{
     private String getConfigString() {
         String jsonstr = null;
 
-        String address = (getApplicationContext().getExternalFilesDirs("")[0].getAbsolutePath()).contains("external_SD") ? getApplicationContext().getExternalFilesDirs("")[1].getAbsolutePath() : getApplicationContext().getExternalFilesDirs("")[0].getAbsolutePath();
+        String address = null;
+        try {
+            address = (getApplicationContext().getExternalFilesDirs("")[0].getAbsolutePath()).contains("external_SD") ? (getApplicationContext().getExternalFilesDirs(""))[1].getAbsolutePath() : (getApplicationContext().getExternalFilesDirs(""))[0].getAbsolutePath();
+        } catch (NullPointerException e) {
+            e.printStackTrace();
+        }
         File config_file = new File(address, "config.ini");
         if (config_file.getAbsoluteFile().exists()) {
             BufferedReader br = null;
@@ -163,7 +168,6 @@ public class MainActivity extends AppCompatActivity{
                 e.printStackTrace();
             }
         } else {
-
             Toast.makeText(getApplicationContext(), "Cannot read the config file", Toast.LENGTH_LONG).show();
         }
 

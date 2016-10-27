@@ -27,13 +27,10 @@ import java.util.TimerTask;
  */
 public class ObjectBoard extends Board{
     private final float sampleFreq;
-    public String devicename;
     private final String SENSOR_DATA_LOG;
-    private int connectionStage = Constants.STAGE.INIT;
     private List<Datapoint> datalist = null;
     private int routeID = 0;
     boolean configured = false;
-    public long connectionAttemptTS;
     private int connectionFailureCount;
     private java.util.Timer timer;
     private boolean destroyed = false;
@@ -100,12 +97,13 @@ public class ObjectBoard extends Board{
         this.datalist = new ArrayList<>();
         this.needs_to_reboot = false;
         this.gatt_error = false;
-        this.confirmReconnect = true;
+        connectionStage = Constants.STAGE.INIT;
+        this.rotationInterval = Constants.CONFIG.OBJECT_INTERVAL;
 
         this.board.setConnectionStateHandler(new MyMetaWearBoardConnectionStateHandler(service) {
             @Override
             public void connected() {
-                confirmReconnect = true;
+                connectionFeedbackTS = System.currentTimeMillis();
                 needs_to_reboot = false;
                 gatt_error = false;
                 connectionFailureCount = 0;
@@ -455,15 +453,20 @@ public class ObjectBoard extends Board{
             @Override
             public void disconnected() {
                 if (connectionStage >= Constants.STAGE.INIT) {
-                    long interval = Constants.CONFIG.OBJECT_INTERVAL - (System.currentTimeMillis() - connectionAttemptTS) % Constants.CONFIG.OBJECT_INTERVAL;
+                    long interval = rotationInterval - (System.currentTimeMillis() - rotationMarkTS) % rotationInterval;
+                    futureConnectionTS = System.currentTimeMillis() + interval;
                     TimerTask reconnect = new TimerTask() {
                         @Override
                         synchronized public void run() {
-//                                Set<String> nearMW = scanBle(5000);
-                            connectionAttemptTS = System.currentTimeMillis();
                             service.writeSensorLog("Try to connect", ForegroundService._info, devicename);
-                            board.connect();
-                            // ToDo: Figure out how to monitor this connect
+                            try {
+                                preConnectionTS = System.currentTimeMillis();
+                                board.connect();
+                            } catch (Exception e) {
+                                Log.e("Reconnect Error", devicename);
+                                e.printStackTrace();
+                                service.writeSensorLog(e.getMessage(), ForegroundService._info, devicename);
+                            }
                         }
                     };
                     timer.schedule(reconnect, interval);
@@ -473,15 +476,15 @@ public class ObjectBoard extends Board{
 
             @Override
             public void failure(int status, Throwable error) {
-                confirmReconnect = true;
+                connectionFeedbackTS = System.currentTimeMillis();
                 if (connectionStage == Constants.STAGE.OUT_OF_BATTERY) {
 
-                } else if (connectionStage != Constants.STAGE.DESTROY) {
+                } else {//if (connectionStage != Constants.STAGE.DESTROY) {
                     error.printStackTrace();
                     service.writeSensorLog(error.getMessage(), ForegroundService._error, devicename);
                     sensor_status = FAILURE;
                     broadcastStatus();
-                    gatt_error = !error.getMessage().contains("Error connecting to gatt server");
+                    gatt_error = error.getMessage().contains("Error connecting to gatt server");
                     if (error.getMessage().contains("status: 257")) {
                         needs_to_reboot = true;
                     }
@@ -490,39 +493,42 @@ public class ObjectBoard extends Board{
                         @Override
                         synchronized public void run() {
                             service.writeSensorLog("Try to connect", ForegroundService._info, devicename);
-                            board.connect();
+                            try {
+                                preConnectionTS = System.currentTimeMillis();
+                                board.connect();
+                            } catch (Exception e) {
+                                Log.e("Reconnect Error", devicename);
+                                e.printStackTrace();
+                                service.writeSensorLog(e.getMessage(), ForegroundService._info, devicename);
+                            }
                         }
                     };
                     TimerTask reconnect_long = new TimerTask() {
                         @Override
                         synchronized public void run() {
-                            connectionAttemptTS = System.currentTimeMillis();
                             service.writeSensorLog("Try to connect", ForegroundService._info, devicename);
-                            board.connect();
+                            try {
+                                preConnectionTS = System.currentTimeMillis();
+                                board.connect();
+                            } catch (Exception e) {
+                                Log.e("Reconnect Error", devicename);
+                                e.printStackTrace();
+                                service.writeSensorLog(e.getMessage(), ForegroundService._info, devicename);
+                            }
                         }
                     };
                     if (connectionFailureCount < 2) {
+                        futureConnectionTS = System.currentTimeMillis();
                         timer.schedule(reconnect, 0);
                         service.writeSensorLog("Reconnect attempt " + connectionFailureCount, ForegroundService._info, devicename);
                     } else {
                         connectionFailureCount = 0;
-                        long interval = Constants.CONFIG.OBJECT_INTERVAL - (System.currentTimeMillis() - connectionAttemptTS) % Constants.CONFIG.OBJECT_INTERVAL;
+                        long interval = rotationInterval - (System.currentTimeMillis() - rotationMarkTS) % rotationInterval;
+                        futureConnectionTS = System.currentTimeMillis() + interval;
                         timer.schedule(reconnect_long, interval);
                         service.writeSensorLog("Skip this round, schedule to reconnect in " + interval + " ms", ForegroundService._info, devicename);
                     }
-                } else {
-                    error.printStackTrace();
-                    sensor_status = FAILURE;
-                    broadcastStatus();
-                    TimerTask reconnect = new TimerTask() {
-                        @Override
-                        synchronized public void run() {
-                            connectionAttemptTS = System.currentTimeMillis();
-                            service.writeSensorLog("Try to connect", ForegroundService._info, devicename);
-                            board.connect();
-                        }
-                    };
-                    timer.schedule(reconnect, 0);
+
                 }
             }
         });

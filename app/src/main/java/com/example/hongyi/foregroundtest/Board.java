@@ -6,6 +6,7 @@ import android.util.Log;
 import com.mbientlab.metawear.MetaWearBoard;
 import com.mbientlab.metawear.data.CartesianFloat;
 import com.mbientlab.metawear.module.Bmi160Accelerometer;
+import com.mbientlab.metawear.module.IBeacon;
 import com.mbientlab.metawear.module.Led;
 import com.mbientlab.metawear.module.Macro;
 import com.mbientlab.metawear.module.Settings;
@@ -16,6 +17,8 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
+import java.util.Timer;
+import java.util.TimerTask;
 
 /**
  * Created by Hongyi on 3/16/2016.
@@ -25,18 +28,23 @@ public class Board {
     public int temperature_ID;
     public int anymotion_ID;
     public int trigger_mode_timer_ID;
-    public byte macro_ID;
-    public boolean confirmReconnect;
+    public int connectionStage;
     public ForegroundService service;
+    public String devicename;
     public MetaWearBoard board;
     public Switch switch_module;
     public Bmi160Accelerometer accel_module;
     public Settings settings_module;
     public Macro macro_module;
     public Led led_module;
+    public IBeacon ibeacon_module;
     public com.mbientlab.metawear.module.Timer timerModule;
     public String sensor_status;
-    public boolean ActiveDisconnect = false;
+    public long rotationMarkTS;
+    public long connectionFeedbackTS;
+    public long preConnectionTS;
+    public long futureConnectionTS;
+    public long rotationInterval;
     public String MAC_ADDRESS;
     public String temperature = "-99999";
     public String battery;
@@ -45,6 +53,7 @@ public class Board {
     public boolean gatt_error;
     public long tempTS;
     public long batteryTS;
+    public Timer reconnectTM;
     public final String CONNECTED = "Connected.\nStreaming Data",
             AWAY = "Sensor out of range",
             DISCONNECTED_BODY = "Lost connection.\nReconnecting",
@@ -56,10 +65,33 @@ public class Board {
             LOG_TAG = "Board_Log",
             OUT_OF_BATTERY = "Out of Battery\nContact support team",
             DOWNLOAD_COMPLETED = "Data download completed";
+
     public Board(ForegroundService service) {
         this.service = service;
+        reconnectTM = new Timer();
         tempTS = 0;
         batteryTS = 0;
+    }
+
+    public void check_and_reconnect(long currentTS) {
+        if (connectionFeedbackTS + rotationInterval < currentTS) {
+            long interval = rotationInterval - (currentTS - rotationMarkTS) % (rotationInterval);
+            TimerTask rc_human = new TimerTask() {
+                @Override
+                synchronized public void run() {
+                    service.writeSensorLog("Try to connect", ForegroundService._info, devicename);
+                    try {
+                        preConnectionTS = System.currentTimeMillis();
+                        board.connect();
+                    } catch (Exception e) {
+                        Log.e("Reconnect Error", devicename);
+                        e.printStackTrace();
+                        service.writeSensorLog(e.getMessage(), ForegroundService._info, devicename);
+                    }
+                }
+            };
+            reconnectTM.schedule(rc_human, interval);
+        }
     }
 
     public ArrayList<String> filtering(ArrayList<String> previousCache, ArrayList<String> dataCache, int thres, int interval) {

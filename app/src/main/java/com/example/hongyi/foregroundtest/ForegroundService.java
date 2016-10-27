@@ -64,7 +64,6 @@ import java.util.concurrent.Executors;
 
 public class ForegroundService extends Service implements ServiceConnection{
     public Set<String> sendJobSet;
-    private Timer servicetimer;
     public Queue<String> resendDataQueue = new ConcurrentLinkedQueue<>();
     public Queue<String> resendBatteryQueue = new ConcurrentLinkedQueue<>();
     public Queue<String> resendTempQueue = new ConcurrentLinkedQueue<>();
@@ -78,10 +77,14 @@ public class ForegroundService extends Service implements ServiceConnection{
     private HashSet<UUID> filterServiceUuids;
     private ArrayList<ScanFilter> api21ScanFilters;
     private final static UUID[] serviceUuids;
+    private final static UUID SOSUuid;
     private static ExecutorService dataPool;
     private static ExecutorService heartbeatPool;
     public boolean keepAlive = false;
+    private Timer servicetimer;
     private Timer restartTM;
+    private Timer launch_queue;
+    private Timer disconnectMonitor;
     private Set<String> nearByDevices;
     public String send_url_base;
     public boolean wifiReset_report = false;
@@ -98,6 +101,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                 MetaWearBoard.METAWEAR_SERVICE_UUID,
                 MetaWearBoard.METABOOT_SERVICE_UUID
         };
+        SOSUuid = Constants.NOTIFICATION_ID.SOS;
         dataPool = Executors.newCachedThreadPool();
         heartbeatPool = Executors.newCachedThreadPool();
     }
@@ -517,7 +521,7 @@ public class ForegroundService extends Service implements ServiceConnection{
         body.sensor_status = body.CONNECTING;
         body.broadcastStatus();
         writeSensorLog("Try to connect", _info, body.devicename);
-        body.connectionAttemptTS = System.currentTimeMillis();
+        body.rotationMarkTS = System.currentTimeMillis();
         body.board.connect();
         try {
             Thread.sleep(5000);
@@ -526,14 +530,14 @@ public class ForegroundService extends Service implements ServiceConnection{
         }
 
         // Rotation connection
-        java.util.Timer launch_queue = new java.util.Timer();
+        launch_queue = new java.util.Timer();
         launch_queue.schedule(new TimerTask() {
             @Override
             public void run() {
                 ObjectBoard b = (ObjectBoard) boards.get(1);
                 b.sensor_status = b.CONNECTING;
                 b.broadcastStatus();
-                b.connectionAttemptTS = System.currentTimeMillis();
+                b.rotationMarkTS = System.currentTimeMillis();
                 writeSensorLog("Try to connect", _info, b.devicename);
                 b.board.connect();
             }
@@ -544,7 +548,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                 ObjectBoard b = (ObjectBoard) boards.get(2);
                 b.sensor_status = b.CONNECTING;
                 b.broadcastStatus();
-                b.connectionAttemptTS = System.currentTimeMillis();
+                b.rotationMarkTS = System.currentTimeMillis();
                 writeSensorLog("Try to connect", _info, b.devicename);
                 b.board.connect();
             }
@@ -555,7 +559,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                 ObjectBoard b = (ObjectBoard) boards.get(3);
                 b.sensor_status = b.CONNECTING;
                 b.broadcastStatus();
-                b.connectionAttemptTS = System.currentTimeMillis();
+                b.rotationMarkTS = System.currentTimeMillis();
                 writeSensorLog("Try to connect", _info, b.devicename);
                 b.board.connect();
             }
@@ -566,7 +570,7 @@ public class ForegroundService extends Service implements ServiceConnection{
                 ObjectBoard b = (ObjectBoard) boards.get(4);
                 b.sensor_status = b.CONNECTING;
                 b.broadcastStatus();
-                b.connectionAttemptTS = System.currentTimeMillis();
+                b.rotationMarkTS = System.currentTimeMillis();
                 writeSensorLog("Try to connect", _info, b.devicename);
                 b.board.connect();
             }
@@ -621,6 +625,22 @@ public class ForegroundService extends Service implements ServiceConnection{
         };
 
         restartTM.schedule(scanForRestart, 600000, Constants.CONFIG.ROTATION_MS);
+
+        disconnectMonitor = new Timer();
+        TimerTask monitorDisconnect = new TimerTask() {
+            @Override
+            public void run() {
+                long current = System.currentTimeMillis();
+                BodyLogBoard human = (BodyLogBoard) boards.get(0);
+                human.check_and_reconnect(current);
+                ObjectBoard[] objects = new ObjectBoard[5];
+                for (int i = 1;i < 5;i++) {
+                    objects[i] = (ObjectBoard) boards.get(i);
+                    objects[i].check_and_reconnect(current);
+                }
+            }
+        };
+        disconnectMonitor.schedule(monitorDisconnect, 600000, Constants.CONFIG.SCAN_DISCONNECT_MS);
     }
 
     @Override

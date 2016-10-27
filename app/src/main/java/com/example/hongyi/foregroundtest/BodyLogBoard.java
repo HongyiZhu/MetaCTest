@@ -12,6 +12,7 @@ import com.mbientlab.metawear.data.CartesianFloat;
 import com.mbientlab.metawear.module.Bmi160Accelerometer;
 import com.mbientlab.metawear.module.DataProcessor;
 import com.mbientlab.metawear.module.Debug;
+import com.mbientlab.metawear.module.IBeacon;
 import com.mbientlab.metawear.module.Led;
 import com.mbientlab.metawear.module.Logging;
 import com.mbientlab.metawear.module.Macro;
@@ -26,6 +27,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.UUID;
 
 /**
  * Created by Hongyi on 3/17/2016.
@@ -33,13 +35,11 @@ import java.util.TimerTask;
 public class BodyLogBoard extends Board{
     private int minute_interval = 2;
     private final float sampleFreq;
-    public String devicename;
     private final String SENSOR_DATA_LOG;
-    public int connectionStage = Constants.STAGE.INIT;
     private List<Datapoint> datalist = null;
     private int routeID = 0;
     boolean configured = false;
-    public long connectionAttemptTS;
+
     private int connectionFailureCount;
     private boolean away;
     private int scanCount;
@@ -49,8 +49,6 @@ public class BodyLogBoard extends Board{
     private int total = 0;
     private long lastDownloadTS;
     private long dl_TS;
-    private int period_expected;
-    private double avg_samp_per_min;
 
 
     private final RouteManager.MessageHandler loggingMessageHandler = new RouteManager.MessageHandler() {
@@ -98,8 +96,31 @@ public class BodyLogBoard extends Board{
         }
     }
 
+    @Override
+    public void check_and_reconnect(long currentTS) {
+        if (!(away) && (connectionFeedbackTS + rotationInterval < currentTS)) {
+            long interval = rotationInterval - (currentTS - rotationMarkTS) % (rotationInterval);
+            TimerTask rc_human = new TimerTask() {
+                @Override
+                synchronized public void run() {
+                    service.writeSensorLog("Try to connect", ForegroundService._info, devicename);
+                    try {
+                        preConnectionTS = System.currentTimeMillis();
+                        board.connect();
+                    } catch (Exception e) {
+                        Log.e("Reconnect Error", devicename);
+                        e.printStackTrace();
+                        service.writeSensorLog(e.getMessage(), ForegroundService._info, devicename);
+                    }
+                }
+            };
+            reconnectTM.schedule(rc_human, interval);
+        }
+    }
+
     public BodyLogBoard(ForegroundService service, MetaWearBoard mxBoard, final String MAC, float freq) {
         super(service);
+        this.connectionStage = Constants.STAGE.INIT;
         this.board = mxBoard;
         this.MAC_ADDRESS = MAC;
         this.sampleFreq = freq;
@@ -110,12 +131,12 @@ public class BodyLogBoard extends Board{
         this.needs_to_reboot = false;
         this.gatt_error = false;
         this.away = false;
-        this.confirmReconnect = false;
+        this.rotationInterval = Constants.CONFIG.BODY_INTERVAL;
 
         this.board.setConnectionStateHandler(new MyMetaWearBoardConnectionStateHandler(service) {
             @Override
             public void connected() {
-                confirmReconnect = true;
+                connectionFeedbackTS = System.currentTimeMillis();
                 gatt_error = false;
                 needs_to_reboot = false;
                 scanCount = 0;
@@ -150,6 +171,7 @@ public class BodyLogBoard extends Board{
                     }
                     try {
                         Logging logger = board.getModule(Logging.class);
+                        ibeacon_module = board.getModule(IBeacon.class);
                         logger.stopLogging();
                         accel_module = board.getModule(Bmi160Accelerometer.class);
                         accel_module.disableAxisSampling();
@@ -158,6 +180,7 @@ public class BodyLogBoard extends Board{
                         timerModule.removeTimers();
                         logger.clearEntries();
                         Debug debug = board.getModule(Debug.class);
+                        ibeacon_module.disable();
                         debug.resetAfterGarbageCollect();
                     } catch (UnsupportedModuleException e) {
                         e.printStackTrace();
@@ -176,6 +199,7 @@ public class BodyLogBoard extends Board{
                         led_module = board.getModule(Led.class);
                         settings_module = board.getModule(Settings.class);
                         macro_module = board.getModule(Macro.class);
+                        ibeacon_module = board.getModule(IBeacon.class);
 
                         timerModule = board.getModule(com.mbientlab.metawear.module.Timer.class);
 
@@ -324,6 +348,12 @@ public class BodyLogBoard extends Board{
 //                                connectionStage = Constants.STAGE.INIT;
 //                            }
 //                        });
+//
+//                        ibeacon_module.configure()
+//                                .setUUID(UUID.fromString("00000000-0000-0000-0000-000000000000"))
+//                                .setAdPeriod((short) 65535)
+//                                .setTxPower((byte)0)
+//                                .commit();
 
 
                         // set board connection configure
@@ -362,8 +392,6 @@ public class BodyLogBoard extends Board{
                         sensor_status = CONNECTED;
                         Logging logger = board.getModule(Logging.class);
                         dl_TS = System.currentTimeMillis();
-                        long period = dl_TS - lastDownloadTS;
-                        period_expected = (int) (avg_samp_per_min * (period / 60000.0));
 
                         // retrieve temperature and battery info
 
@@ -544,58 +572,19 @@ public class BodyLogBoard extends Board{
 
             @Override
             public void disconnected() {
-//                if (connectionStage == Constants.STAGE.CONFIGURE || connectionStage == Constants.STAGE.INIT) {
-//                    TimerTask reconnect_after_reset = new TimerTask() {
-//                        @Override
-//                        synchronized public void run() {
-//                            connectionAttemptTS = System.currentTimeMillis();
-//                            service.writeSensorLog("Try to connect", ForegroundService._info, devicename);
-//                            board.connect();
-//                        }
-//                    };
-//                    // 30s between Reset and Configuration
-//                    timer.schedule(reconnect_after_reset, 120000);
-//                    service.writeSensorLog("Disconnected from the sensor and scheduled next connection in " + 120000 + " ms", ForegroundService._info, devicename);
-//                } else if (connectionStage == Constants.STAGE.DOWNLOAD) {
-//                    long interval = Constants.CONFIG.BODY_INTERVAL - (System.currentTimeMillis() - connectionAttemptTS) % (Constants.CONFIG.BODY_INTERVAL);
-//                    TimerTask reconnect = new TimerTask() {
-//                        @Override
-//                        synchronized public void run() {
-//                            connectionAttemptTS = System.currentTimeMillis();
-//                            service.writeSensorLog("Try to connect", ForegroundService._info, devicename);
-//                            board.connect();
-//                        }
-//                    };
-//                    // 2 mins' reconnection
-//                    timer.schedule(reconnect, interval);
-//                    service.writeSensorLog("Disconnected from the sensor and scheduled next connection in " + interval + " ms", ForegroundService._info, devicename);
-//                }
-                long interval = Constants.CONFIG.BODY_INTERVAL - (System.currentTimeMillis() - connectionAttemptTS) % (Constants.CONFIG.BODY_INTERVAL);
+                long interval = rotationInterval - (System.currentTimeMillis() - rotationMarkTS) % (rotationInterval);
+                futureConnectionTS = System.currentTimeMillis() + interval;
                 TimerTask reconnect = new TimerTask() {
                     @Override
                     synchronized public void run() {
-                        connectionAttemptTS = System.currentTimeMillis();
                         service.writeSensorLog("Try to connect", ForegroundService._info, devicename);
-                        confirmReconnect = false;
                         try {
+                            preConnectionTS = System.currentTimeMillis();
                             board.connect();
                         } catch (Exception e) {
+                            Log.e("Reconnect Error", devicename);
+                            e.printStackTrace();
                             service.writeSensorLog(e.getMessage(), ForegroundService._info, devicename);
-                        }
-                        for (int i = 0; i < 3; i++) {
-                            try {
-                                Thread.sleep(15000);
-                                if (!confirmReconnect) {
-                                    board.connect();
-                                } else {
-                                    break;
-                                }
-                            } catch (InterruptedException e) {
-                                e.printStackTrace();
-                            }
-                        }
-                        if (!confirmReconnect) {
-                            needs_to_reboot = true;
                         }
                     }
                 };
@@ -606,7 +595,7 @@ public class BodyLogBoard extends Board{
 
             @Override
             public void failure(int status, Throwable error) {
-                confirmReconnect = true;
+                connectionFeedbackTS = System.currentTimeMillis();
                 if (connectionStage != Constants.STAGE.OUT_OF_BATTERY) {
                     connectionFailureCount += 1;
                     if (!away && connectionFailureCount <= 5) {
@@ -623,15 +612,23 @@ public class BodyLogBoard extends Board{
                         if (error.getMessage().contains("status: 257")) {
                             needs_to_reboot = true;
                         }
-                        if (scanCount >= 3) {
+                        if (scanCount >= 2) {
                             needs_to_reboot = true;
                         }
-                        broadcastStatus();
                         service.writeSensorLog("Try to connect", ForegroundService._info, devicename);
-                        board.connect();
+                        try {
+                            preConnectionTS = System.currentTimeMillis();
+                            futureConnectionTS = preConnectionTS;
+                            board.connect();
+                        } catch (Exception e) {
+                            Log.e("Reconnect Error", devicename);
+                            e.printStackTrace();
+                            service.writeSensorLog(e.getMessage(), ForegroundService._info, devicename);
+                        }
                     } else {
                         searchTM = new Timer();
                         connectionFailureCount = 0;
+                        futureConnectionTS = System.currentTimeMillis() + Constants.CONFIG.SEARCH_BLE_DEVICE_INTERVAL;
                         searchTM.schedule(new TimerTask() {
                             @Override
                             public void run() {
@@ -643,11 +640,25 @@ public class BodyLogBoard extends Board{
                                         if (connectionStage == Constants.STAGE.DOWNLOAD) {
                                             connectionStage = Constants.STAGE.BACK_IN_RANGE;
                                         }
-                                        board.connect();
+                                        try {
+                                            preConnectionTS = System.currentTimeMillis();
+                                            board.connect();
+                                        } catch (Exception e) {
+                                            Log.e("Reconnect Error", devicename);
+                                            e.printStackTrace();
+                                            service.writeSensorLog(e.getMessage(), ForegroundService._info, devicename);
+                                        }
                                     } else {
                                         away = false;
                                         scanCount += 1;
-                                        board.connect();
+                                        try {
+                                            preConnectionTS = System.currentTimeMillis();
+                                            board.connect();
+                                        } catch (Exception e) {
+                                            Log.e("Reconnect Error", devicename);
+                                            e.printStackTrace();
+                                            service.writeSensorLog(e.getMessage(), ForegroundService._info, devicename);
+                                        }
                                     }
                                 } else {
                                     away = true;
