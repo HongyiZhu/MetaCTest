@@ -135,9 +135,9 @@ public class ForegroundService extends Service implements ServiceConnection{
             bw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(log_file, true)));
             bw.write(getFormattedTime() + "\t");
             for (String flag : flags) {
-                bw.write(flag + "\t");
+                bw.write(String.valueOf(flag) + "\t");
             }
-            bw.write(s);
+            bw.write(String.valueOf(s));
             bw.newLine();
             bw.flush();
         } catch (IOException e) {
