@@ -220,6 +220,19 @@ public class Board {
         return dataLists;
     }
 
+    public String getVersionJSON (String name, String ts, String version) {
+        JSONObject jsonstring = new JSONObject();
+        try {
+            jsonstring.put("s", name);
+            jsonstring.put("t", Double.valueOf(ts));
+            jsonstring.put("v", version);
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+
+        return jsonstring.toString();
+    }
+
     public String getJSON (String name, String ts) {
         JSONObject jsonstring = new JSONObject();
         try {

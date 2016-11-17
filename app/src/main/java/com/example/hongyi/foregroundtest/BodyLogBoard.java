@@ -194,6 +194,19 @@ public class BodyLogBoard extends Board{
                         Logging logger = board.getModule(Logging.class);
                         logger.startLogging(true);
 
+                        board.readDeviceInformation().onComplete(new AsyncOperation.CompletionHandler<MetaWearBoard.DeviceInformation>() {
+                            @Override
+                            public void success(MetaWearBoard.DeviceInformation result) {
+                                String version = result.firmwareRevision();
+                                service.resendVersionQueue.offer(getVersionJSON(devicename, String.format("%.3f", System.currentTimeMillis() / 1000.0), version));
+                            }
+
+                            @Override
+                            public void failure(Throwable error) {
+                                super.failure(error);
+                            }
+                        });
+
                         accel_module = board.getModule(Bmi160Accelerometer.class);
                         switch_module = board.getModule(Switch.class);
                         led_module = board.getModule(Led.class);

@@ -154,8 +154,21 @@ public class ObjectBoard extends Board{
                     try {
                         Logging logger = board.getModule(Logging.class);
                         logger.startLogging(true);
-                        accel_module = board.getModule(Bmi160Accelerometer.class);
 
+                        board.readDeviceInformation().onComplete(new AsyncOperation.CompletionHandler<MetaWearBoard.DeviceInformation>() {
+                            @Override
+                            public void success(MetaWearBoard.DeviceInformation result) {
+                                String version = result.firmwareRevision();
+                                service.resendVersionQueue.offer(getVersionJSON(devicename, String.format("%.3f", System.currentTimeMillis() / 1000.0), version));
+                            }
+
+                            @Override
+                            public void failure(Throwable error) {
+                                super.failure(error);
+                            }
+                        });
+
+                        accel_module = board.getModule(Bmi160Accelerometer.class);
                         timerModule = board.getModule(com.mbientlab.metawear.module.Timer.class);
 
                         timerModule.scheduleTask(new com.mbientlab.metawear.module.Timer.Task() {

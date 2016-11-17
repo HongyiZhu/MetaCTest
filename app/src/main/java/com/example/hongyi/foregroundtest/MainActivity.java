@@ -192,16 +192,16 @@ public class MainActivity extends AppCompatActivity{
         }
 //        mQueue = Volley.newRequestQueue(this);
         if (!IS_SERVICE_RUNNING) {
-            ConnectivityManager connMgr = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
-            NetworkInfo netInfo = connMgr.getActiveNetworkInfo();
-            while (netInfo == null || !netInfo.isConnected()) {
-                try {
-                    Thread.sleep(3000);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-                netInfo = connMgr.getActiveNetworkInfo();
-            }
+//            ConnectivityManager connMgr = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+//            NetworkInfo netInfo = connMgr.getActiveNetworkInfo();
+//            while (netInfo == null || !netInfo.isConnected()) {
+//                try {
+//                    Thread.sleep(3000);
+//                } catch (InterruptedException e) {
+//                    e.printStackTrace();
+//                }
+//                netInfo = connMgr.getActiveNetworkInfo();
+//            }
 
             final Handler mHandler = new Handler() {
                 @Override
