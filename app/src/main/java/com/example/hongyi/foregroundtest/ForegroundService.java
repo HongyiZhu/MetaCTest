@@ -19,12 +19,18 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
+import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.IBinder;
 import android.os.ParcelUuid;
 import android.support.v7.app.NotificationCompat;
+import android.telephony.TelephonyManager;
 import android.util.Log;
 
 import com.mbientlab.metawear.MetaWearBleService;
@@ -69,6 +75,7 @@ public class ForegroundService extends Service implements ServiceConnection{
     public Queue<String> resendTempQueue = new ConcurrentLinkedQueue<>();
     public Queue<String> resendHeartbeatQueue = new ConcurrentLinkedQueue<>();
     public Queue<String> resendVersionQueue = new ConcurrentLinkedQueue<>();
+    public Queue<String> resendGatewayVersionQueue = new ConcurrentLinkedQueue<>();
     private File log_file;
     public static final String LOG_TAG = "ForegroundService", LOG_ERR = "http_err", _info = "INF";
     public static final String _success = "SUC", _error = "ERR";
@@ -88,9 +95,8 @@ public class ForegroundService extends Service implements ServiceConnection{
     private Timer disconnectMonitor;
     private Set<String> nearByDevices;
     public String send_url_base;
-    public boolean wifiReset_report = false;
+    public int wifiReset_report = 0;
     private WifiRestarter wr;
-    private boolean wifiReboot = false;
     private BluetoothAdapter.LeScanCallback deprecatedScanCallback= null;
     private ScanCallback api21ScallCallback= null;
     private long next_3am;
@@ -121,6 +127,30 @@ public class ForegroundService extends Service implements ServiceConnection{
     @Override
     public void onCreate() {
         super.onCreate();
+        String phoneID = ((TelephonyManager) getSystemService(TELEPHONY_SERVICE)).getDeviceId();
+        PackageInfo pinfo = null;
+        try {
+            pinfo = getPackageManager().getPackageInfo(getPackageName(), 0);
+        } catch (PackageManager.NameNotFoundException e) {
+            e.printStackTrace();
+        }
+        String versionName = pinfo.versionName;
+        String data = getGatewayVersionJSON(phoneID, versionName);
+        resendGatewayVersionQueue.offer(data);
+
+    }
+
+    private String getGatewayVersionJSON(String name, String version) {
+        JSONObject jsonstring = new JSONObject();
+        try {
+            jsonstring.put("s", name);
+            jsonstring.put("v", version);
+            jsonstring.put("t", System.currentTimeMillis() / 1000.0);
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+
+        return jsonstring.toString();
     }
 
     private String getFormattedTime() {
@@ -265,6 +295,10 @@ public class ForegroundService extends Service implements ServiceConnection{
                         resendBatteryQueue.add(line);
                     } else if (line.contains("\"logs\"")) {
                         resendDataQueue.add(line);
+                    } else if (line.contains("\"g\"")) {
+                        resendGatewayVersionQueue.add(line);
+                    } else if (line.contains(("\"v\""))) {
+                        resendVersionQueue.add(line);
                     }
                 }
                 br.close();
@@ -450,7 +484,7 @@ public class ForegroundService extends Service implements ServiceConnection{
             flag = boards.get(i).needs_to_reboot || flag;
         }
 
-        flag = flag || wifiReboot || gatt_restart;
+        flag = flag || gatt_restart;
 
         return flag;
     }
@@ -484,6 +518,11 @@ public class ForegroundService extends Service implements ServiceConnection{
                 if (!resendVersionQueue.isEmpty()) {
                     String data = resendVersionQueue.poll();
                     postVersionAsync task = new postVersionAsync(service);
+                    task.executeOnExecutor(heartbeatPool, data);
+                }
+                if (!resendGatewayVersionQueue.isEmpty()) {
+                    String data = resendGatewayVersionQueue.poll();
+                    postGatewayVersionAsync task = new postGatewayVersionAsync(service);
                     task.executeOnExecutor(heartbeatPool, data);
                 }
             }
@@ -588,7 +627,11 @@ public class ForegroundService extends Service implements ServiceConnection{
         TimerTask scanForRestart = new TimerTask() {
             @Override
             public void run() {
-                if (wifiReset_report) {
+                ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+                NetworkInfo activeNetwork = cm.getActiveNetworkInfo();
+                boolean isConnected = activeNetwork != null && activeNetwork.isConnectedOrConnecting();
+                if (wifiReset_report == 1 || !isConnected) {
+                    wifiReset_report = 2;
                     wr.restartWifi();
                 }
                 btAdapter = ((BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE)).getAdapter();
@@ -598,6 +641,10 @@ public class ForegroundService extends Service implements ServiceConnection{
 
                 Set<String> nearMW = scanBle(5000);
                 Log.i("BLE", String.valueOf(nearMW.size()));
+                if (nearMW.isEmpty()) {
+                    nearMW = scanBle(10000);
+                    Log.i("BLE", String.valueOf(nearMW.size()));
+                }
 
                 if ((nearMW.isEmpty() && btAdapter.isEnabled()) || (need_reboot())) {
                     // Save unsent tasks

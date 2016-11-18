@@ -34,8 +34,8 @@ public class MyAsyncTask extends AsyncTask<String, Boolean, String> {
 
     private boolean need_to_drop(String message) {
         if (message.contains("DNS") || message.contains("unreachable") || message.contains("resolve")) {
-            if (!service.wifiReset_report) {
-                service.wifiReset_report = true;
+            if (service.wifiReset_report == 0) {
+                service.wifiReset_report = 1;
             }
             return true;
         }
@@ -108,6 +108,12 @@ public class MyAsyncTask extends AsyncTask<String, Boolean, String> {
                             case "battery":
                                 service.resendBatteryQueue.offer(params[0]);
                                 break;
+                            case "version":
+                                service.resendVersionQueue.offer(params[0]);
+                                break;
+                            case "g/version":
+                                service.resendGatewayVersionQueue.offer(params[0]);
+                                break;
                         }
                         service.writeSensorLog("Post err code: " + response + " " + params[0], ForegroundService._error);
                     }
@@ -138,12 +144,21 @@ public class MyAsyncTask extends AsyncTask<String, Boolean, String> {
                         case "battery":
                             service.resendBatteryQueue.offer(params[0]);
                             break;
+                        case "version":
+                            service.resendVersionQueue.offer(params[0]);
+                            break;
+                        case "g/version":
+                            service.resendGatewayVersionQueue.offer(params[0]);
+                            break;
                     }
                 }
             }
         } else {
             // Catch Wifi error
             Log.e(ForegroundService.LOG_ERR, "No active connection");
+            if (service.wifiReset_report == 0) {
+                service.wifiReset_report = 1;
+            }
 //            switch (request) {
 //                case "heartbeat":
 //                    service.resendHeartbeatQueue.offer(params[0]);

@@ -11,6 +11,7 @@ import android.content.pm.PackageManager;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.Uri;
+import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
@@ -202,6 +203,14 @@ public class MainActivity extends AppCompatActivity{
 //                }
 //                netInfo = connMgr.getActiveNetworkInfo();
 //            }
+            WifiManager wm = (WifiManager) getSystemService(Context.WIFI_SERVICE);
+            wm.setWifiEnabled(true);
+            try {
+                Thread.sleep(10000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+
 
             final Handler mHandler = new Handler() {
                 @Override
