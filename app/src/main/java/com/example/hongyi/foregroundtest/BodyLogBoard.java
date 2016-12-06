@@ -378,7 +378,7 @@ public class BodyLogBoard extends Board{
                                     .commit();
                             board.getModule(Settings.class)
                                     .configure()
-                                    .setAdInterval((short) 1500, (byte) 0)
+                                    .setAdInterval((short) 417, (byte) 0)
                                     .commit();
                         } catch (UnsupportedModuleException e) {
                             e.printStackTrace();
