@@ -376,10 +376,10 @@ public class BodyLogBoard extends Board{
                                     .setMaxConnectionInterval(100.f)
                                     .setSlaveLatency((short) 20)
                                     .commit();
-                            board.getModule(Settings.class)
-                                    .configure()
-                                    .setAdInterval((short) 417, (byte) 0)
-                                    .commit();
+//                            board.getModule(Settings.class)
+//                                    .configure()
+//                                    .setAdInterval((short) 417, (byte) 0)
+//                                    .commit();
                         } catch (UnsupportedModuleException e) {
                             e.printStackTrace();
                         }
