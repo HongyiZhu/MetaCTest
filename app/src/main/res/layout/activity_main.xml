@@ -1,258 +1,262 @@
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools" android:layout_width="match_parent"
-    android:layout_height="match_parent" android:paddingLeft="@dimen/activity_horizontal_margin"
-    android:paddingRight="@dimen/activity_horizontal_margin"
-    android:paddingTop="@dimen/activity_vertical_margin"
-    android:paddingBottom="@dimen/activity_vertical_margin" tools:context=".MainActivity">
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_height="match_parent" android:layout_width="match_parent">
 
-    <Button
-        android:id="@+id/button1"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Start Service"
-        android:onClick="buttonClicked"
-        android:layout_below="@+id/TS_5"
-        android:layout_centerHorizontal="true"
-        android:layout_marginTop="15dp" />
+    <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+        xmlns:tools="http://schemas.android.com/tools" android:layout_width="match_parent"
+        android:layout_height="match_parent" android:paddingLeft="@dimen/activity_horizontal_margin"
+        android:paddingRight="@dimen/activity_horizontal_margin"
+        android:paddingTop="@dimen/activity_vertical_margin"
+        android:paddingBottom="@dimen/activity_vertical_margin" tools:context=".MainActivity">
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/sensor1"
-        android:id="@+id/Tag_1"
-        android:layout_marginTop="5dp"
-        android:layout_alignParentTop="true"
-        android:layout_alignParentStart="true"
-        android:textStyle="bold" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/sensor1"
+            android:id="@+id/Tag_1"
+            android:layout_marginTop="5dp"
+            android:layout_alignParentTop="true"
+            android:layout_alignParentStart="true"
+            android:textStyle="bold" />
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/degree"
-        android:id="@+id/Degree_1"
-        android:layout_alignParentEnd="true"
-        android:layout_alignBottom="@+id/Tag_1"
-        android:textStyle="bold" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/degree"
+            android:id="@+id/Degree_1"
+            android:layout_alignParentEnd="true"
+            android:layout_alignBottom="@+id/Tag_1"
+            android:textStyle="bold" />
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:id="@+id/Temperature_1"
-        android:layout_alignBottom="@+id/Degree_1"
-        android:layout_toStartOf="@+id/Degree_1" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/Temperature_1"
+            android:layout_alignBottom="@+id/Degree_1"
+            android:layout_toStartOf="@+id/Degree_1" />
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:id="@+id/MAC_1"
-        android:layout_alignBottom="@+id/Tag_1"
-        android:layout_toEndOf="@+id/Tag_1" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/MAC_1"
+            android:layout_alignBottom="@+id/Tag_1"
+            android:layout_toEndOf="@+id/Tag_1" />
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:id="@+id/Status_1"
-        android:text="@string/connecting"
-        android:layout_below="@+id/Tag_1"
-        android:layout_alignParentStart="true" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/Status_1"
+            android:text="@string/connecting"
+            android:layout_below="@+id/Tag_1"
+            android:layout_alignParentStart="true" />
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:id="@+id/TS_1"
-        android:layout_below="@+id/Degree_1"
-        android:layout_alignParentEnd="true" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/TS_1"
+            android:layout_below="@+id/Degree_1"
+            android:layout_alignParentEnd="true" />
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/sensor2"
-        android:id="@+id/Tag_2"
-        android:layout_marginTop="15dp"
-        android:layout_below="@+id/TS_1"
-        android:layout_alignParentStart="true"
-        android:textStyle="bold" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/sensor2"
+            android:id="@+id/Tag_2"
+            android:layout_marginTop="30dp"
+            android:layout_below="@+id/TS_1"
+            android:layout_alignParentStart="true"
+            android:textStyle="bold" />
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:id="@+id/MAC_2"
-        android:layout_alignBottom="@+id/Tag_2"
-        android:layout_toEndOf="@+id/Tag_2" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/MAC_2"
+            android:layout_alignBottom="@+id/Tag_2"
+            android:layout_toEndOf="@+id/Tag_2" />
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/degree"
-        android:id="@+id/Degree_2"
-        android:layout_alignBottom="@+id/MAC_2"
-        android:layout_alignParentEnd="true"
-        android:textStyle="bold"/>
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/degree"
+            android:id="@+id/Degree_2"
+            android:layout_alignBottom="@+id/MAC_2"
+            android:layout_alignParentEnd="true"
+            android:textStyle="bold"/>
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:id="@+id/Temperature_2"
-        android:layout_alignBottom="@+id/Degree_2"
-        android:layout_toStartOf="@+id/Degree_2" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/Temperature_2"
+            android:layout_alignBottom="@+id/Degree_2"
+            android:layout_toStartOf="@+id/Degree_2" />
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:id="@+id/Status_2"
-        android:text="@string/connecting"
-        android:layout_below="@+id/Tag_2"
-        android:layout_alignParentStart="true" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/Status_2"
+            android:text="@string/connecting"
+            android:layout_below="@+id/Tag_2"
+            android:layout_alignParentStart="true" />
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:id="@+id/TS_2"
-        android:layout_below="@+id/Degree_2"
-        android:layout_alignParentEnd="true" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/TS_2"
+            android:layout_below="@+id/Degree_2"
+            android:layout_alignParentEnd="true" />
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/sensor3"
-        android:id="@+id/Tag_3"
-        android:layout_marginTop="15dp"
-        android:layout_below="@+id/TS_2"
-        android:layout_alignParentStart="true"
-        android:textStyle="bold"/>
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/sensor3"
+            android:id="@+id/Tag_3"
+            android:layout_marginTop="30dp"
+            android:layout_below="@+id/TS_2"
+            android:layout_alignParentStart="true"
+            android:textStyle="bold"/>
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:id="@+id/MAC_3"
-        android:layout_alignBottom="@+id/Tag_3"
-        android:layout_toEndOf="@+id/Tag_3" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/MAC_3"
+            android:layout_alignBottom="@+id/Tag_3"
+            android:layout_toEndOf="@+id/Tag_3" />
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/degree"
-        android:id="@+id/Degree_3"
-        android:layout_alignBottom="@+id/MAC_3"
-        android:layout_alignParentEnd="true"
-        android:textStyle="bold"/>
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/degree"
+            android:id="@+id/Degree_3"
+            android:layout_alignBottom="@+id/MAC_3"
+            android:layout_alignParentEnd="true"
+            android:textStyle="bold"/>
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:id="@+id/Temperature_3"
-        android:layout_alignBottom="@+id/Degree_3"
-        android:layout_toStartOf="@+id/Degree_3" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/Temperature_3"
+            android:layout_alignBottom="@+id/Degree_3"
+            android:layout_toStartOf="@+id/Degree_3" />
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:id="@+id/Status_3"
-        android:text="@string/connecting"
-        android:layout_below="@+id/Tag_3"
-        android:layout_alignParentStart="true" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/Status_3"
+            android:text="@string/connecting"
+            android:layout_below="@+id/Tag_3"
+            android:layout_alignParentStart="true" />
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:id="@+id/TS_3"
-        android:layout_below="@+id/Degree_3"
-        android:layout_alignParentEnd="true" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/TS_3"
+            android:layout_below="@+id/Degree_3"
+            android:layout_alignParentEnd="true" />
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/sensor4"
-        android:id="@+id/Tag_4"
-        android:layout_marginTop="15dp"
-        android:layout_below="@+id/TS_3"
-        android:layout_alignParentStart="true"
-        android:textStyle="bold"/>
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/sensor4"
+            android:id="@+id/Tag_4"
+            android:layout_marginTop="30dp"
+            android:layout_below="@+id/TS_3"
+            android:layout_alignParentStart="true"
+            android:textStyle="bold"/>
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:id="@+id/MAC_4"
-        android:layout_alignBottom="@+id/Tag_4"
-        android:layout_toEndOf="@+id/Tag_4" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/MAC_4"
+            android:layout_alignBottom="@+id/Tag_4"
+            android:layout_toEndOf="@+id/Tag_4" />
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/degree"
-        android:id="@+id/Degree_4"
-        android:layout_alignBottom="@+id/MAC_4"
-        android:layout_alignParentEnd="true"
-        android:textStyle="bold"/>
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/degree"
+            android:id="@+id/Degree_4"
+            android:layout_alignBottom="@+id/MAC_4"
+            android:layout_alignParentEnd="true"
+            android:textStyle="bold"/>
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:id="@+id/Temperature_4"
-        android:layout_alignBottom="@+id/Degree_4"
-        android:layout_toStartOf="@+id/Degree_4" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/Temperature_4"
+            android:layout_alignBottom="@+id/Degree_4"
+            android:layout_toStartOf="@+id/Degree_4" />
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:id="@+id/Status_4"
-        android:text="@string/connecting"
-        android:layout_below="@+id/Tag_4"
-        android:layout_alignParentStart="true" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/Status_4"
+            android:text="@string/connecting"
+            android:layout_below="@+id/Tag_4"
+            android:layout_alignParentStart="true" />
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:id="@+id/TS_4"
-        android:layout_below="@+id/Degree_4"
-        android:layout_alignParentEnd="true" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/TS_4"
+            android:layout_below="@+id/Degree_4"
+            android:layout_alignParentEnd="true" />
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/sensor5"
-        android:id="@+id/Tag_5"
-        android:layout_marginTop="15dp"
-        android:layout_below="@+id/TS_4"
-        android:layout_alignParentStart="true"
-        android:textStyle="bold"/>
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/sensor5"
+            android:id="@+id/Tag_5"
+            android:layout_marginTop="30dp"
+            android:layout_below="@+id/TS_4"
+            android:layout_alignParentStart="true"
+            android:textStyle="bold"/>
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:id="@+id/MAC_5"
-        android:layout_alignBottom="@+id/Tag_5"
-        android:layout_toEndOf="@+id/Tag_5" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/MAC_5"
+            android:layout_alignBottom="@+id/Tag_5"
+            android:layout_toEndOf="@+id/Tag_5" />
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/degree"
-        android:id="@+id/Degree_5"
-        android:layout_alignBottom="@+id/MAC_5"
-        android:layout_alignParentEnd="true"
-        android:textStyle="bold"/>
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/degree"
+            android:id="@+id/Degree_5"
+            android:layout_alignBottom="@+id/MAC_5"
+            android:layout_alignParentEnd="true"
+            android:textStyle="bold"/>
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:id="@+id/Temperature_5"
-        android:layout_alignBottom="@+id/Degree_5"
-        android:layout_toStartOf="@+id/Degree_5" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/Temperature_5"
+            android:layout_alignBottom="@+id/Degree_5"
+            android:layout_toStartOf="@+id/Degree_5" />
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:id="@+id/Status_5"
-        android:text="@string/connecting"
-        android:layout_below="@+id/Tag_5"
-        android:layout_alignParentStart="true" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/Status_5"
+            android:text="@string/connecting"
+            android:layout_below="@+id/Tag_5"
+            android:layout_alignParentStart="true" />
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:id="@+id/TS_5"
-        android:layout_below="@+id/Degree_5"
-        android:layout_alignParentEnd="true" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/TS_5"
+            android:layout_below="@+id/Degree_5"
+            android:layout_alignParentEnd="true" />
 
-</RelativeLayout>
+        <Button
+            android:id="@+id/button1"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Start Service"
+            android:onClick="buttonClicked"
+            android:layout_marginTop="205dp"
+            android:layout_below="@+id/Status_5"
+            android:layout_centerHorizontal="true" />
+
+    </RelativeLayout>
+</ScrollView>

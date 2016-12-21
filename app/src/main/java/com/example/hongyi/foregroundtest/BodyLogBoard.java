@@ -45,6 +45,7 @@ public class BodyLogBoard extends Board{
     private int scanCount;
     private java.util.Timer timer;
     private java.util.Timer searchTM;
+    private java.util.Timer reconTM;
     private boolean destroyed = false;
     private int total = 0;
     private long lastDownloadTS;
@@ -114,6 +115,9 @@ public class BodyLogBoard extends Board{
                     }
                 }
             };
+            reconnectTM.cancel();
+            reconnectTM.purge();
+            reconnectTM = new Timer();
             reconnectTM.schedule(rc_human, interval);
         }
     }
@@ -472,108 +476,108 @@ public class BodyLogBoard extends Board{
                         };
                         timer.schedule(interrupt, Constants.CONFIG.DOWNLOAD_TIMEOUT);
 
-                        final long remaining_space = logger.getLogCapacity();
-                        service.writeSensorLog(" Remaining space: " + remaining_space, ForegroundService._info, devicename);
-                        if (remaining_space > 40) {
-                            logger.downloadLog(0.1f, new Logging.DownloadHandler() {
-                                @Override
-                                public void onProgressUpdate(int nEntriesLeft, int totalEntries) {
-                                    Log.i("data", String.format("Progress: %d/%d/%d", datalist.size(), totalEntries - nEntriesLeft, totalEntries));
-                                    service.writeSensorLog(String.format("Download Progress: %d/%d", totalEntries - nEntriesLeft, totalEntries), ForegroundService._info, devicename);
-                                    total = totalEntries;
-                                    if (nEntriesLeft == 0) {
-                                        Log.i("data", "Download Completed");
-                                        lastDownloadTS = dl_TS;
+//                        final long remaining_space = logger.getLogCapacity();
+//                        service.writeSensorLog(" Remaining space: " + remaining_space, ForegroundService._info, devicename);
+//                        if (remaining_space > 40) {
+                        logger.downloadLog(0.1f, new Logging.DownloadHandler() {
+                            @Override
+                            public void onProgressUpdate(int nEntriesLeft, int totalEntries) {
+                                Log.i("data", String.format("Progress: %d/%d/%d", datalist.size(), totalEntries - nEntriesLeft, totalEntries));
+                                service.writeSensorLog(String.format("Download Progress: %d/%d", totalEntries - nEntriesLeft, totalEntries), ForegroundService._info, devicename);
+                                total = totalEntries;
+                                if (nEntriesLeft == 0) {
+                                    Log.i("data", "Download Completed");
+                                    lastDownloadTS = dl_TS;
 //                                        expected_N = datalist.size();
-                                        service.writeSensorLog("Download Completed", ForegroundService._success, devicename);
-                                        Log.i("data", "Generated " + datalist.size() + " data points");
-                                        service.writeSensorLog("Generated " + datalist.size() + " data points", ForegroundService._success, devicename);
-                                        if (!sensor_status.equals(OUT_OF_BATTERY)) {
-                                            sensor_status = DISCONNECTED_OBJ;
-                                        }
-                                        //process listed data
-                                        // send to server
-                                        if (!datalist.isEmpty()) {
-                                            List<Datapoint> temp = new ArrayList<>(datalist);
-                                            datalist.clear();
-                                            ArrayList<String> data = getFilteredDataCache((ArrayList<Datapoint>) temp);
-                                            if (data.size() > 0) {
-                                                ArrayList<String> data_array = getJSONList(devicename, data);
-                                                for (String s : data_array) {
-                                                    service.resendDataQueue.offer(s);
-                                                }
-                                            }
-                                        }
-                                        if (!sensor_status.equals(OUT_OF_BATTERY)) {
-                                            sensor_status = DOWNLOAD_COMPLETED;
-                                        }
-                                        total = 0;
-
-                                        if (connectionStage == Constants.STAGE.BACK_IN_RANGE) {
-                                            connectionStage = Constants.STAGE.INIT;
-                                        }
-
-                                        timer.schedule(new TimerTask() {
-                                            @Override
-                                            public void run() {
-                                                board.disconnect();
-                                                broadcastStatus();
-                                            }
-                                        }, Constants.CONFIG.WAIT_AFTER_DOWNLOAD);
-                                    }
-                                }
-
-                                @Override
-                                public void receivedUnknownLogEntry(byte logId, Calendar timestamp, byte[] data) {
-                                }
-
-                                @Override
-                                public void receivedUnhandledLogEntry(Message logMessage) {
-                                    Log.i("dataUnhandled", logMessage.toString());
-                                }
-                            }).onComplete(new AsyncOperation.CompletionHandler<Integer>() {
-                                @Override
-                                public void success(Integer result) {
-                                    Log.i("Data to download", String.valueOf(result));
-                                    if (result == 0) {
+                                    service.writeSensorLog("Download Completed", ForegroundService._success, devicename);
+                                    Log.i("data", "Generated " + datalist.size() + " data points");
+                                    service.writeSensorLog("Generated " + datalist.size() + " data points", ForegroundService._success, devicename);
+                                    if (!sensor_status.equals(OUT_OF_BATTERY)) {
                                         sensor_status = DISCONNECTED_OBJ;
-                                        if (connectionStage == Constants.STAGE.BACK_IN_RANGE) {
-                                            connectionStage = Constants.STAGE.INIT;
-                                        }
-                                        board.disconnect();
-                                        broadcastStatus();
-                                        service.writeSensorLog("No data generated", ForegroundService._success, devicename);
                                     }
-                                }
-                            });
-                        } else {
-                            service.writeSensorLog("No enough space on sensor, Reset", ForegroundService._error, devicename);
-                            if (!sensor_status.equals(OUT_OF_BATTERY)) {
-                                connectionStage = Constants.STAGE.CONFIGURE;
-                                board.removeRoutes();
-                                try {
-                                    logger = board.getModule(Logging.class);
-                                    logger.stopLogging();
-                                    accel_module = board.getModule(Bmi160Accelerometer.class);
-                                    accel_module.stop();
-                                    accel_module.disableAxisSampling();
-                                    logger.clearEntries();
+                                    //process listed data
+                                    // send to server
+                                    if (!datalist.isEmpty()) {
+                                        List<Datapoint> temp = new ArrayList<>(datalist);
+                                        datalist.clear();
+                                        ArrayList<String> data = getFilteredDataCache((ArrayList<Datapoint>) temp);
+                                        if (data.size() > 0) {
+                                            ArrayList<String> data_array = getJSONList(devicename, data);
+                                            for (String s : data_array) {
+                                                service.resendDataQueue.offer(s);
+                                            }
+                                        }
+                                    }
+                                    if (!sensor_status.equals(OUT_OF_BATTERY)) {
+                                        sensor_status = DOWNLOAD_COMPLETED;
+                                    }
                                     total = 0;
-                                } catch (UnsupportedModuleException e) {
-                                    e.printStackTrace();
-                                }
-                                sensor_status = INITIATED;
-                            }
-                            total = 0;
 
-                            timer.schedule(new TimerTask() {
-                                @Override
-                                public void run() {
+                                    if (connectionStage == Constants.STAGE.BACK_IN_RANGE) {
+                                        connectionStage = Constants.STAGE.INIT;
+                                    }
+
+                                    timer.schedule(new TimerTask() {
+                                        @Override
+                                        public void run() {
+                                            board.disconnect();
+                                            broadcastStatus();
+                                        }
+                                    }, Constants.CONFIG.WAIT_AFTER_DOWNLOAD);
+                                }
+                            }
+
+                            @Override
+                            public void receivedUnknownLogEntry(byte logId, Calendar timestamp, byte[] data) {
+                            }
+
+                            @Override
+                            public void receivedUnhandledLogEntry(Message logMessage) {
+                                Log.i("dataUnhandled", logMessage.toString());
+                            }
+                        }).onComplete(new AsyncOperation.CompletionHandler<Integer>() {
+                            @Override
+                            public void success(Integer result) {
+                                Log.i("Data to download", String.valueOf(result));
+                                if (result == 0) {
+                                    sensor_status = DISCONNECTED_OBJ;
+                                    if (connectionStage == Constants.STAGE.BACK_IN_RANGE) {
+                                        connectionStage = Constants.STAGE.INIT;
+                                    }
                                     board.disconnect();
                                     broadcastStatus();
+                                    service.writeSensorLog("No data generated", ForegroundService._success, devicename);
                                 }
-                            }, Constants.CONFIG.WAIT_AFTER_DOWNLOAD);
-                        }
+                            }
+                        });
+//                        } else {
+//                            service.writeSensorLog("No enough space on sensor, Reset", ForegroundService._error, devicename);
+//                            if (!sensor_status.equals(OUT_OF_BATTERY)) {
+//                                connectionStage = Constants.STAGE.CONFIGURE;
+//                                board.removeRoutes();
+//                                try {
+//                                    logger = board.getModule(Logging.class);
+//                                    logger.stopLogging();
+//                                    accel_module = board.getModule(Bmi160Accelerometer.class);
+//                                    accel_module.stop();
+//                                    accel_module.disableAxisSampling();
+//                                    logger.clearEntries();
+//                                    total = 0;
+//                                } catch (UnsupportedModuleException e) {
+//                                    e.printStackTrace();
+//                                }
+//                                sensor_status = INITIATED;
+//                            }
+//                            total = 0;
+//
+//                            timer.schedule(new TimerTask() {
+//                                @Override
+//                                public void run() {
+//                                    board.disconnect();
+//                                    broadcastStatus();
+//                                }
+//                            }, Constants.CONFIG.WAIT_AFTER_DOWNLOAD);
+//                        }
                     } catch (UnsupportedModuleException e) {
                         e.printStackTrace();
                     }
@@ -602,7 +606,10 @@ public class BodyLogBoard extends Board{
                     }
                 };
                 // 2 mins' reconnection
-                timer.schedule(reconnect, interval);
+                reconnectTM.purge();
+                reconnectTM.cancel();
+                reconnectTM = new java.util.Timer();
+                reconnectTM.schedule(reconnect, interval);
                 service.writeSensorLog("Disconnected from the sensor and scheduled next connection in " + interval + " ms", ForegroundService._info, devicename);
             }
 

@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 import java.util.Map;
+import java.util.Timer;
 import java.util.TimerTask;
 
 /**
@@ -482,7 +483,10 @@ public class ObjectBoard extends Board{
                             }
                         }
                     };
-                    timer.schedule(reconnect, interval);
+                    reconnectTM.cancel();
+                    reconnectTM.purge();
+                    reconnectTM = new Timer();
+                    reconnectTM.schedule(reconnect, interval);
                     service.writeSensorLog("Disconnected from the sensor and scheduled next connection in " + interval + " ms", ForegroundService._info, devicename);
                 }
             }
@@ -532,13 +536,19 @@ public class ObjectBoard extends Board{
                     };
                     if (connectionFailureCount < 2) {
                         futureConnectionTS = System.currentTimeMillis();
-                        timer.schedule(reconnect, 0);
+                        reconnectTM.cancel();
+                        reconnectTM.purge();
+                        reconnectTM = new Timer();
+                        reconnectTM.schedule(reconnect, 0);
                         service.writeSensorLog("Reconnect attempt " + connectionFailureCount, ForegroundService._info, devicename);
                     } else {
                         connectionFailureCount = 0;
                         long interval = rotationInterval - (System.currentTimeMillis() - rotationMarkTS) % rotationInterval;
                         futureConnectionTS = System.currentTimeMillis() + interval;
-                        timer.schedule(reconnect_long, interval);
+                        reconnectTM.cancel();
+                        reconnectTM.purge();
+                        reconnectTM = new Timer();
+                        reconnectTM.schedule(reconnect_long, interval);
                         service.writeSensorLog("Skip this round, schedule to reconnect in " + interval + " ms", ForegroundService._info, devicename);
                     }
 

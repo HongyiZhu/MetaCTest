@@ -90,6 +90,9 @@ public class Board {
                     }
                 }
             };
+            reconnectTM.cancel();
+            reconnectTM.purge();
+            reconnectTM = new Timer();
             reconnectTM.schedule(rc_human, interval);
         }
     }

@@ -72,7 +72,7 @@ public class MainActivity extends AppCompatActivity{
         @Override
         public void onReceive(Context context, Intent intent) {
             if (intent.getAction().equals(Constants.NOTIFICATION_ID.BROADCAST_TAG)) {
-                String timestring = "Updated on: " + sdf.format(intent.getLongExtra("timestamp", -1));
+                String timestring = sdf.format(intent.getLongExtra("timestamp", -1));
                 String MAC = intent.getStringExtra("name");
                 String status = intent.getStringExtra("status");
                 String temperature = intent.getStringExtra("temperature");
