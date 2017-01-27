@@ -49,4 +49,5 @@ dependencies {
     compile 'com.android.volley:volley:1.0.0'
     compile 'com.mbientlab:metawear:2.6.5'
     compile 'ch.acra:acra:4.9.0'
+    compile 'org.altbeacon:android-beacon-library:2.9.2'
 }

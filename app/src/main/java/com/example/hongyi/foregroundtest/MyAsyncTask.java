@@ -28,7 +28,7 @@ public class MyAsyncTask extends AsyncTask<String, Boolean, String> {
     MyAsyncTask(ForegroundService service, String request) {
         super();
         this.service = service;
-        this.request = request.split("/")[1];
+        this.request = request.substring(1);
         urlbase = service.send_url_base + request;
     }
 
@@ -114,6 +114,9 @@ public class MyAsyncTask extends AsyncTask<String, Boolean, String> {
                             case "g/version":
                                 service.resendGatewayVersionQueue.offer(params[0]);
                                 break;
+                            case "g/heartbeat":
+                                service.resendGatewayHeartbeatQueue.offer(params[0]);
+                                break;
                         }
                         service.writeSensorLog("Post err code: " + response + " " + params[0], ForegroundService._error);
                     }
@@ -149,6 +152,9 @@ public class MyAsyncTask extends AsyncTask<String, Boolean, String> {
                             break;
                         case "g/version":
                             service.resendGatewayVersionQueue.offer(params[0]);
+                            break;
+                        case "g/heartbeat":
+                            service.resendGatewayHeartbeatQueue.offer(params[0]);
                             break;
                     }
                 }

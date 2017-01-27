@@ -161,7 +161,7 @@ public class MainActivity extends AppCompatActivity{
         }
         File config_file = new File(address, "config.ini");
         if (config_file.getAbsoluteFile().exists()) {
-            BufferedReader br = null;
+            BufferedReader br;
             try {
                 br = new BufferedReader(new InputStreamReader(new FileInputStream(config_file)));
                 jsonstr = br.readLine();
@@ -230,14 +230,17 @@ public class MainActivity extends AppCompatActivity{
                             String send_url = js.getString("send_url");
                             service.putExtra("send_url", send_url);
                             JSONArray jsonarr = js.getJSONArray("sensors");
+                            short setID = 0;
                             for (int i = 0; i < jsonarr.length(); i++) {
                                 JSONObject jsobj = jsonarr.getJSONObject(i);
                                 String id = ((String) jsobj.get("sensor_id")).replaceAll("..(?!$)", "$0:");
                                 String sn = (String) jsobj.get("sensor_sn");
                                 String lb = sn.substring(sn.length() - 1);
+                                setID = Short.valueOf(sn.substring(0, sn.length() - 1));
                                 Log.i("sensor", "Label: " + lb + ".\tMAC: " + id);
                                 service.putExtra(lb, id);
                             }
+                            service.putExtra("setID", setID);
                         } catch (JSONException e) {
                             e.printStackTrace();
                         }
@@ -308,7 +311,7 @@ public class MainActivity extends AppCompatActivity{
                     String jsonstr = null;
 
                     URL url;
-                    HttpURLConnection connection = null;
+                    HttpURLConnection connection;
                     try {
                         url = new URL("https://app.silverlink247.com/startup");
                         connection = (HttpURLConnection) url.openConnection();

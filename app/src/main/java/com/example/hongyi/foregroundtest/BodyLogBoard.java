@@ -50,6 +50,7 @@ public class BodyLogBoard extends Board{
     private int total = 0;
     private long lastDownloadTS;
     private long dl_TS;
+    public int SOS_flag = 0;
 
 
     private final RouteManager.MessageHandler loggingMessageHandler = new RouteManager.MessageHandler() {
@@ -122,7 +123,7 @@ public class BodyLogBoard extends Board{
         }
     }
 
-    public BodyLogBoard(ForegroundService service, MetaWearBoard mxBoard, final String MAC, float freq) {
+    public BodyLogBoard(ForegroundService service, MetaWearBoard mxBoard, final String MAC, float freq, short setNo) {
         super(service);
         this.connectionStage = Constants.STAGE.INIT;
         this.board = mxBoard;
@@ -136,6 +137,7 @@ public class BodyLogBoard extends Board{
         this.gatt_error = false;
         this.away = false;
         this.rotationInterval = Constants.CONFIG.BODY_INTERVAL;
+        this.setID = setNo;
 
         this.board.setConnectionStateHandler(new MyMetaWearBoardConnectionStateHandler(service) {
             @Override
@@ -152,6 +154,23 @@ public class BodyLogBoard extends Board{
                     searchTM = null;
                 }
                 service.resendHeartbeatQueue.offer(getJSON(devicename, String.format("%.3f", System.currentTimeMillis() / 1000.0)));
+                if (SOS_flag == 2) {
+                    ibeacon_module.configure()
+                            .setAdPeriod((short) 1500)
+                            .setMajor((short) 0)
+                            .setMinor(setID)
+                            .commit();
+                    led_module.stop(true);
+                    led_module.configureColorChannel(Led.ColorChannel.GREEN)
+                            .setHighIntensity((byte) 31)
+                            .setPulseDuration((short) 3000)
+                            .setHighTime((short) 100)
+                            .setRiseTime((short) 1400)
+                            .setFallTime((short) 1400)
+                            .commit();
+                }
+
+
                 if (connectionStage == Constants.STAGE.INIT) {
                     data_ID = -1;
                     temperature_ID = -1;
@@ -166,16 +185,21 @@ public class BodyLogBoard extends Board{
                                 .setMaxConnectionInterval(40.f)
                                 .setSlaveLatency((short) 1)
                                 .commit();
-                        board.getModule(Settings.class)
-                                .configure()
-                                .setAdInterval((short) 417, (byte) 0)
+                        ibeacon_module = board.getModule(IBeacon.class);
+                        ibeacon_module.configure()
+                                .setAdPeriod((short) 1500)
+                                .setMajor((short) 0)
+                                .setMinor(setID)
                                 .commit();
+//                        board.getModule(Settings.class)
+//                                .configure()
+//                                .setAdInterval((short) 417, (byte) 0)
+//                                .commit();
                     } catch (UnsupportedModuleException e) {
                         e.printStackTrace();
                     }
                     try {
                         Logging logger = board.getModule(Logging.class);
-                        ibeacon_module = board.getModule(IBeacon.class);
                         logger.stopLogging();
                         accel_module = board.getModule(Bmi160Accelerometer.class);
                         accel_module.disableAxisSampling();
@@ -184,7 +208,7 @@ public class BodyLogBoard extends Board{
                         timerModule.removeTimers();
                         logger.clearEntries();
                         Debug debug = board.getModule(Debug.class);
-                        ibeacon_module.disable();
+                        ibeacon_module.enable();
                         debug.resetAfterGarbageCollect();
                     } catch (UnsupportedModuleException e) {
                         e.printStackTrace();
@@ -319,58 +343,52 @@ public class BodyLogBoard extends Board{
                             e.printStackTrace();
                         }
 
-//                        macro_module.record(new Macro.CodeBlock() {
-//                            @Override
-//                            public void commands() {
-//                                switch_module.routeData().fromSensor().monitor(new DataSignal.ActivityHandler() {
-//                                    @Override
-//                                    public void onSignalActive(Map<String, DataProcessor> map, DataSignal.DataToken dataToken) {
-//                                        settings_module.configure().setDeviceName("SOS").commit();
-//                                        led_module.configureColorChannel(Led.ColorChannel.RED)
-//                                                .setHighIntensity((byte) 31)
-//                                                .setPulseDuration((short) 2000)
-//                                                .setHighTime((short) 1500)
-//                                                .setRiseTime((short) 0)
-//                                                .setFallTime((short) 0)
-//                                                .commit();
-//                                        led_module.play(true);
-//                                    }
-//                                }).commit().onComplete(new AsyncOperation.CompletionHandler<RouteManager>() {
-//                                    @Override
-//                                    public void success(RouteManager result) {
-//                                        Log.i("SOS Route", String.valueOf(result.id()));
-//                                    }
-//
-//                                    @Override
-//                                    public void failure(Throwable error) {
-//                                        error.printStackTrace();
-//                                        connectionStage = Constants.STAGE.INIT;
-//                                    }
-//                                });
-//                            }
-//
-//                            @Override
-//                            public boolean execOnBoot() {
-//                                return false;
-//                            }
-//                        }).onComplete(new AsyncOperation.CompletionHandler<Byte>() {
-//                            @Override
-//                            public void success(Byte result) {
-//                                macro_ID = result;
-//                            }
-//
-//                            @Override
-//                            public void failure(Throwable error) {
-//                                error.printStackTrace();
-//                                connectionStage = Constants.STAGE.INIT;
-//                            }
-//                        });
-//
-//                        ibeacon_module.configure()
-//                                .setUUID(UUID.fromString("00000000-0000-0000-0000-000000000000"))
-//                                .setAdPeriod((short) 65535)
-//                                .setTxPower((byte)0)
-//                                .commit();
+                        macro_module.record(new Macro.CodeBlock() {
+                            @Override
+                            public void commands() {
+                                switch_module.routeData().fromSensor().monitor(new DataSignal.ActivityHandler() {
+                                    @Override
+                                    public void onSignalActive(Map<String, DataProcessor> map, DataSignal.DataToken dataToken) {
+                                        ibeacon_module.configure().setMajor((short) 1).setAdPeriod((short) 100).commit();
+                                        led_module.configureColorChannel(Led.ColorChannel.RED)
+                                                .setHighIntensity((byte) 31)
+                                                .setPulseDuration((short) 2000)
+                                                .setHighTime((short) 1500)
+                                                .setRiseTime((short) 0)
+                                                .setFallTime((short) 0)
+                                                .commit();
+                                        led_module.play(true);
+                                    }
+                                }).commit().onComplete(new AsyncOperation.CompletionHandler<RouteManager>() {
+                                    @Override
+                                    public void success(RouteManager result) {
+                                        Log.i("SOS Route", String.valueOf(result.id()));
+                                    }
+
+                                    @Override
+                                    public void failure(Throwable error) {
+                                        error.printStackTrace();
+                                        connectionStage = Constants.STAGE.INIT;
+                                    }
+                                });
+                            }
+
+                            @Override
+                            public boolean execOnBoot() {
+                                return false;
+                            }
+                        }).onComplete(new AsyncOperation.CompletionHandler<Byte>() {
+                            @Override
+                            public void success(Byte result) {
+                                macro_ID = result;
+                            }
+
+                            @Override
+                            public void failure(Throwable error) {
+                                error.printStackTrace();
+                                connectionStage = Constants.STAGE.INIT;
+                            }
+                        });
 
 
                         // set board connection configure

@@ -87,7 +87,7 @@ public class ObjectBoard extends Board{
         }
     }
 
-    public ObjectBoard(ForegroundService service, MetaWearBoard mxBoard, final String MAC, float freq) {
+    public ObjectBoard(ForegroundService service, MetaWearBoard mxBoard, final String MAC, float freq, short setNo) {
         super(service);
         this.board = mxBoard;
         this.MAC_ADDRESS = MAC;
@@ -100,6 +100,7 @@ public class ObjectBoard extends Board{
         this.gatt_error = false;
         connectionStage = Constants.STAGE.INIT;
         this.rotationInterval = Constants.CONFIG.OBJECT_INTERVAL;
+        this.setID = setNo;
 
         this.board.setConnectionStateHandler(new MyMetaWearBoardConnectionStateHandler(service) {
             @Override

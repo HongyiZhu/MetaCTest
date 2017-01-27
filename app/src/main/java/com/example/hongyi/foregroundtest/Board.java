@@ -28,7 +28,9 @@ public class Board {
     public int temperature_ID;
     public int anymotion_ID;
     public int trigger_mode_timer_ID;
+    public int macro_ID;
     public int connectionStage;
+    public short setID;
     public ForegroundService service;
     public String devicename;
     public MetaWearBoard board;

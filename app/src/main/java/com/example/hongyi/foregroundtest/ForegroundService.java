@@ -29,6 +29,7 @@ import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.IBinder;
 import android.os.ParcelUuid;
+import android.os.RemoteException;
 import android.support.v7.app.NotificationCompat;
 import android.telephony.TelephonyManager;
 import android.util.Log;
@@ -36,6 +37,14 @@ import android.util.Log;
 import com.mbientlab.metawear.MetaWearBleService;
 import com.mbientlab.metawear.MetaWearBoard;
 
+import org.altbeacon.beacon.Beacon;
+import org.altbeacon.beacon.BeaconConsumer;
+import org.altbeacon.beacon.BeaconManager;
+import org.altbeacon.beacon.BeaconParser;
+import org.altbeacon.beacon.Identifier;
+import org.altbeacon.beacon.MonitorNotifier;
+import org.altbeacon.beacon.RangeNotifier;
+import org.altbeacon.beacon.Region;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -54,6 +63,7 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
+import java.util.Collection;
 import java.util.Date;
 import java.util.GregorianCalendar;
 import java.util.HashMap;
@@ -68,7 +78,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-public class ForegroundService extends Service implements ServiceConnection{
+public class ForegroundService extends Service implements ServiceConnection, BeaconConsumer{
     public Set<String> sendJobSet;
     public Queue<String> resendDataQueue = new ConcurrentLinkedQueue<>();
     public Queue<String> resendBatteryQueue = new ConcurrentLinkedQueue<>();
@@ -76,6 +86,7 @@ public class ForegroundService extends Service implements ServiceConnection{
     public Queue<String> resendHeartbeatQueue = new ConcurrentLinkedQueue<>();
     public Queue<String> resendVersionQueue = new ConcurrentLinkedQueue<>();
     public Queue<String> resendGatewayVersionQueue = new ConcurrentLinkedQueue<>();
+    public Queue<String> resendGatewayHeartbeatQueue = new ConcurrentLinkedQueue<>();
     private File log_file;
     public static final String LOG_TAG = "ForegroundService", LOG_ERR = "http_err", _info = "INF";
     public static final String _success = "SUC", _error = "ERR";
@@ -93,6 +104,7 @@ public class ForegroundService extends Service implements ServiceConnection{
     private Timer restartTM;
     private Timer launch_queue;
     private Timer disconnectMonitor;
+    private Timer gatewayHeartbeatTM;
     private Set<String> nearByDevices;
     public String send_url_base;
     public int wifiReset_report = 0;
@@ -100,6 +112,11 @@ public class ForegroundService extends Service implements ServiceConnection{
     private BluetoothAdapter.LeScanCallback deprecatedScanCallback= null;
     private ScanCallback api21ScallCallback= null;
     private long next_3am;
+    private String phoneID;
+    private String versionName;
+    private String gatewayHeartbeat;
+    private BeaconManager beaconManager;
+    private short setID;
 
     public static boolean IS_SERVICE_RUNNING = false;
 
@@ -127,23 +144,28 @@ public class ForegroundService extends Service implements ServiceConnection{
     @Override
     public void onCreate() {
         super.onCreate();
-        String phoneID = ((TelephonyManager) getSystemService(TELEPHONY_SERVICE)).getDeviceId();
+        phoneID = ((TelephonyManager) getSystemService(TELEPHONY_SERVICE)).getDeviceId();
         PackageInfo pinfo = null;
         try {
             pinfo = getPackageManager().getPackageInfo(getPackageName(), 0);
-        } catch (PackageManager.NameNotFoundException e) {
+            versionName = pinfo.versionName;
+        } catch (PackageManager.NameNotFoundException | NullPointerException e) {
             e.printStackTrace();
         }
-        String versionName = pinfo.versionName;
-        String data = getGatewayVersionJSON(phoneID, versionName);
-        resendGatewayVersionQueue.offer(data);
-
+        gatewayHeartbeat = getGatewayVersionJSON(phoneID, versionName);
+        resendGatewayVersionQueue.offer(gatewayHeartbeat);
+        beaconManager = BeaconManager.getInstanceForApplication(this);
+        beaconManager.setForegroundScanPeriod(5000);
+        beaconManager.setForegroundBetweenScanPeriod(15000);
+        beaconManager.getBeaconParsers().add(new BeaconParser().
+                setBeaconLayout("m:2-3=0215,i:4-19,i:20-21,i:22-23,p:24-24"));
+        beaconManager.bind(this);
     }
 
     private String getGatewayVersionJSON(String name, String version) {
         JSONObject jsonstring = new JSONObject();
         try {
-            jsonstring.put("s", name);
+            jsonstring.put("g", name);
             jsonstring.put("v", version);
             jsonstring.put("t", System.currentTimeMillis() / 1000.0);
         } catch (JSONException e) {
@@ -156,8 +178,7 @@ public class ForegroundService extends Service implements ServiceConnection{
     private String getFormattedTime() {
         SimpleDateFormat sdfDate = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");//dd/MM/yyyy
         Date now = new Date();
-        String strDate = sdfDate.format(now);
-        return strDate;
+        return sdfDate.format(now);
     }
 
     public void writeSensorLog(String s, String... flags) {
@@ -203,6 +224,18 @@ public class ForegroundService extends Service implements ServiceConnection{
             folder.mkdirs();
         }
 
+        if (gatewayHeartbeatTM != null) {
+            gatewayHeartbeatTM.cancel();
+            gatewayHeartbeatTM.purge();
+        }
+        gatewayHeartbeatTM = new Timer();
+        gatewayHeartbeatTM.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                resendGatewayHeartbeatQueue.offer(gatewayHeartbeat);
+            }
+        }, 1000 * 60 * 3, 100 * 60 * 3);
+
         if (intent != null) {
             if (intent.getAction().equals(Constants.ACTION.STARTFOREGROUND_ACTION)) {
                 if (SENSOR_MAC.size() == 0) {
@@ -212,13 +245,15 @@ public class ForegroundService extends Service implements ServiceConnection{
                     SENSOR_MAC.add(intent.getStringExtra("D"));
                     SENSOR_MAC.add(intent.getStringExtra("E"));
                 }
+                setID = intent.getShortExtra("setID", (short) 0);
                 send_url_base = intent.getStringExtra("send_url");
                 Log.i(LOG_TAG, "Received Start Foreground Intent");
 //            writeSensorLog("Received Start Foreground Intent", _info);
                 showNotification();
 //            Toast.makeText(this, "Service Started!", Toast.LENGTH_SHORT).show();
-            } else if (intent.getAction().equals(
-                    Constants.ACTION.STOPFOREGROUND_ACTION)) {
+            } else if (intent.getAction().equals(Constants.ACTION.STOPFOREGROUND_ACTION)) {
+                gatewayHeartbeatTM.cancel();
+                gatewayHeartbeatTM.purge();
                 Log.i(LOG_TAG, "Received Stop Foreground Intent");
                 writeSensorLog("Received Stop Foreground Intent", _info);
                 stopForeground(true);
@@ -296,7 +331,8 @@ public class ForegroundService extends Service implements ServiceConnection{
                     } else if (line.contains("\"logs\"")) {
                         resendDataQueue.add(line);
                     } else if (line.contains("\"g\"")) {
-                        resendGatewayVersionQueue.add(line);
+//                        resendGatewayVersionQueue.add(line);
+//                        resendGatewayHeartbeatQueue.add(line);
                     } else if (line.contains(("\"v\""))) {
                         resendVersionQueue.add(line);
                     }
@@ -350,6 +386,7 @@ public class ForegroundService extends Service implements ServiceConnection{
         Log.i(LOG_TAG, "In onDestroy");
         writeSensorLog("In onDestroy", _info);
         ((BodyLogBoard) boards.get(0)).connectionStage = Constants.STAGE.DESTROY;
+        beaconManager.unbind(this);
         boards.get(0).board.connect();
         Log.i(LOG_TAG, "Body sensor destroyed");
         writeSensorLog("Body sensor destroyed", _info);
@@ -525,6 +562,11 @@ public class ForegroundService extends Service implements ServiceConnection{
                     postGatewayVersionAsync task = new postGatewayVersionAsync(service);
                     task.executeOnExecutor(heartbeatPool, data);
                 }
+                if (!resendGatewayHeartbeatQueue.isEmpty()) {
+                    String data = resendGatewayHeartbeatQueue.poll();
+                    postGatewayHeartbeatAsync task = new postGatewayHeartbeatAsync(service);
+                    task.executeOnExecutor(heartbeatPool, data);
+                }
             }
         }, 0, 500);
 
@@ -550,14 +592,14 @@ public class ForegroundService extends Service implements ServiceConnection{
 
         // Add body sensor
         BluetoothDevice btDevice = btAdapter.getRemoteDevice(SENSOR_MAC.get(0));
-        boards.add(new BodyLogBoard(this, serviceBinder.getMetaWearBoard(btDevice), SENSOR_MAC.get(0), 12.5f));
+        boards.add(new BodyLogBoard(this, serviceBinder.getMetaWearBoard(btDevice), SENSOR_MAC.get(0), 12.5f, setID));
         Log.i(LOG_TAG, "Body Board added");
         writeSensorLog("Body Board added", _info);
 
         // Add four object sensors
         for (int i = 1; i < SENSOR_MAC.size(); i++){
             btDevice = btAdapter.getRemoteDevice(SENSOR_MAC.get(i));
-            boards.add(new ObjectBoard(this, serviceBinder.getMetaWearBoard(btDevice), SENSOR_MAC.get(i), 1.5625f));
+            boards.add(new ObjectBoard(this, serviceBinder.getMetaWearBoard(btDevice), SENSOR_MAC.get(i), 1.5625f, setID));
             Log.i(LOG_TAG, "Object Board added");
             writeSensorLog("Object Board added", _info);
         }
@@ -698,6 +740,31 @@ public class ForegroundService extends Service implements ServiceConnection{
 
     @Override
     public void onServiceDisconnected(ComponentName name) {
+
+    }
+
+    @TargetApi(22)
+    private void scanSOS(long interval) {}
+
+    @Override
+    public void onBeaconServiceConnect() {
+        beaconManager.addRangeNotifier(new RangeNotifier() {
+            @Override
+            public void didRangeBeaconsInRegion(Collection<Beacon> collection, Region region) {
+                for (Beacon beacon: collection) {
+                    Log.i("iBeacon", beacon.getBluetoothAddress());
+                }
+            }
+        });
+
+
+        Identifier uuid = Identifier.fromUuid(UUID.fromString("326A9000-85CB-9195-D9DD-464CFBBAE75A"));
+        Identifier major = Identifier.fromInt(1);
+        try {
+            beaconManager.startRangingBeaconsInRegion(new Region("SOS", uuid, major, null));
+        } catch (RemoteException e) {
+            e.printStackTrace();
+        }
 
     }
 }
