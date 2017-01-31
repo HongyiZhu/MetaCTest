@@ -9,7 +9,7 @@ def getDate() {
 
 android {
     def verMajor = 0
-    def verMinor = 8
+    def verMinor = 9
     def verBuild = getDate()
     compileSdkVersion 23
     buildToolsVersion "23.0.2"

@@ -155,8 +155,8 @@ public class ForegroundService extends Service implements ServiceConnection, Bea
         gatewayHeartbeat = getGatewayVersionJSON(phoneID, versionName);
         resendGatewayVersionQueue.offer(gatewayHeartbeat);
         beaconManager = BeaconManager.getInstanceForApplication(this);
-        beaconManager.setForegroundScanPeriod(5000);
-        beaconManager.setForegroundBetweenScanPeriod(15000);
+        beaconManager.setForegroundScanPeriod(10000);
+        beaconManager.setForegroundBetweenScanPeriod(05000);
         beaconManager.getBeaconParsers().add(new BeaconParser().
                 setBeaconLayout("m:2-3=0215,i:4-19,i:20-21,i:22-23,p:24-24"));
         beaconManager.bind(this);
@@ -237,7 +237,26 @@ public class ForegroundService extends Service implements ServiceConnection, Bea
         }, 1000 * 60 * 3, 100 * 60 * 3);
 
         if (intent != null) {
-            if (intent.getAction().equals(Constants.ACTION.STARTFOREGROUND_ACTION)) {
+            if (intent.getAction().equals(Constants.ACTION.SOS_RECEIVED)) {
+                BodyLogBoard bdb = (BodyLogBoard) boards.get(0);
+                if (bdb.SOS_flag == 1) {
+                    bdb.SOS_flag = 2;
+                    bdb.board.disconnect();
+                    try {
+                        Thread.sleep(5000);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                    bdb.reconnectTM.cancel();
+                    bdb.reconnectTM.purge();
+                    bdb.reconnectTM = new java.util.Timer();
+                    bdb.sensor_status = bdb.CONNECTING;
+                    bdb.broadcastStatus();
+                    writeSensorLog("Try to connect", _info, bdb.devicename);
+                    bdb.rotationMarkTS = System.currentTimeMillis();
+                    bdb.board.connect();
+                }
+            } else if (intent.getAction().equals(Constants.ACTION.STARTFOREGROUND_ACTION)) {
                 if (SENSOR_MAC.size() == 0) {
                     SENSOR_MAC.add(intent.getStringExtra("A"));
                     SENSOR_MAC.add(intent.getStringExtra("B"));
@@ -268,7 +287,7 @@ public class ForegroundService extends Service implements ServiceConnection, Bea
                 send_url_base = js.getString("send_url");
                 JSONArray jsonarr = js.getJSONArray("sensors");
                 Map<String, String> hm = new HashMap<>();
-                for (int i = 0;i<jsonarr.length();i++) {
+                for (int i = 0; i < jsonarr.length(); i++) {
                     JSONObject jsobj = jsonarr.getJSONObject(i);
                     String id = ((String) jsobj.get("sensor_id")).replaceAll("..(?!$)", "$0:");
                     String sn = (String) jsobj.get("sensor_sn");
@@ -752,7 +771,18 @@ public class ForegroundService extends Service implements ServiceConnection, Bea
             @Override
             public void didRangeBeaconsInRegion(Collection<Beacon> collection, Region region) {
                 for (Beacon beacon: collection) {
-                    Log.i("iBeacon", beacon.getBluetoothAddress());
+                    String mac = beacon.getBluetoothAddress();
+                    Log.e("iBeacon", "SOS Received from: " + mac);
+                    Log.e("iBeacon", "SOS Received from: " + mac);
+                    Log.e("iBeacon", "SOS Received from: " + mac);
+                    Log.e("iBeacon", "SOS Received from: " + mac);
+
+                    if (SENSOR_MAC.indexOf(mac) != -1) {
+                        BodyLogBoard bdb = (BodyLogBoard) boards.get(0);
+                        if (bdb.SOS_flag == 0) {
+                            bdb.SOS_flag = 1;
+                        }
+                    }
                 }
             }
         });

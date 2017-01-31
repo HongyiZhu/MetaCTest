@@ -415,6 +415,13 @@ public class MainActivity extends AppCompatActivity{
         }
     }
 
+    public void SOS_received(View v) {
+        Button button = (Button) v;
+        Intent service = new Intent(MainActivity.this, ForegroundService.class);
+        service.setAction(Constants.ACTION.SOS_RECEIVED);
+        startService(service);
+    }
+
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         getMenuInflater().inflate(R.menu.menu_main, menu);

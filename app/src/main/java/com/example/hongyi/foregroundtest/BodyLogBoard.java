@@ -168,10 +168,11 @@ public class BodyLogBoard extends Board{
                             .setRiseTime((short) 1400)
                             .setFallTime((short) 1400)
                             .commit();
+                    led_module.play(true);
+                    SOS_flag = 0;
                 }
 
-
-                if (connectionStage == Constants.STAGE.INIT) {
+                if (connectionStage == Constants.STAGE.RESET) {
                     data_ID = -1;
                     temperature_ID = -1;
                     anymotion_ID = -1;
@@ -185,20 +186,6 @@ public class BodyLogBoard extends Board{
                                 .setMaxConnectionInterval(40.f)
                                 .setSlaveLatency((short) 1)
                                 .commit();
-                        ibeacon_module = board.getModule(IBeacon.class);
-                        ibeacon_module.configure()
-                                .setAdPeriod((short) 1500)
-                                .setMajor((short) 0)
-                                .setMinor(setID)
-                                .commit();
-//                        board.getModule(Settings.class)
-//                                .configure()
-//                                .setAdInterval((short) 417, (byte) 0)
-//                                .commit();
-                    } catch (UnsupportedModuleException e) {
-                        e.printStackTrace();
-                    }
-                    try {
                         Logging logger = board.getModule(Logging.class);
                         logger.stopLogging();
                         accel_module = board.getModule(Bmi160Accelerometer.class);
@@ -208,8 +195,36 @@ public class BodyLogBoard extends Board{
                         timerModule.removeTimers();
                         logger.clearEntries();
                         Debug debug = board.getModule(Debug.class);
-                        ibeacon_module.enable();
                         debug.resetAfterGarbageCollect();
+                    } catch (UnsupportedModuleException e) {
+                        e.printStackTrace();
+                    }
+                } else if (connectionStage == Constants.STAGE.INIT) {
+                    data_ID = -1;
+                    temperature_ID = -1;
+                    anymotion_ID = -1;
+                    trigger_mode_timer_ID = -1;
+                    connectionStage = Constants.STAGE.CONFIGURE;
+                    try {
+                        ibeacon_module = board.getModule(IBeacon.class);
+                        ibeacon_module.configure()
+                                .setAdPeriod((short) 1500)
+                                .setMajor((short) 0)
+                                .setMinor(setID)
+                                .commit();
+                        macro_module = board.getModule(Macro.class);
+                        macro_module.eraseMacros();
+                        Logging logger = board.getModule(Logging.class);
+                        logger.stopLogging();
+                        accel_module = board.getModule(Bmi160Accelerometer.class);
+                        accel_module.disableAxisSampling();
+                        accel_module.stop();
+                        timerModule = board.getModule(com.mbientlab.metawear.module.Timer.class);
+                        timerModule.removeTimers();
+                        logger.clearEntries();
+                        ibeacon_module.enable();
+                        Debug debug = board.getModule(Debug.class);
+                        debug.disconnect();
                     } catch (UnsupportedModuleException e) {
                         e.printStackTrace();
                     }
@@ -350,6 +365,7 @@ public class BodyLogBoard extends Board{
                                     @Override
                                     public void onSignalActive(Map<String, DataProcessor> map, DataSignal.DataToken dataToken) {
                                         ibeacon_module.configure().setMajor((short) 1).setAdPeriod((short) 100).commit();
+                                        led_module.stop(true);
                                         led_module.configureColorChannel(Led.ColorChannel.RED)
                                                 .setHighIntensity((byte) 31)
                                                 .setPulseDuration((short) 2000)

@@ -31,6 +31,7 @@ public class Constants {
         int STREAMING = 4;
         int DESTROY = -1;
         int OUT_OF_BATTERY = -2;
+        int RESET = -255;
     }
 
     public interface ACTION {
@@ -38,6 +39,7 @@ public class Constants {
         String INIT_ACTION = "com.marothiatechs.foregroundservice.action.init";
         String STARTFOREGROUND_ACTION = "com.marothiatechs.foregroundservice.action.startforeground";
         String STOPFOREGROUND_ACTION = "com.marothiatechs.foregroundservice.action.stopforeground";
+        String SOS_RECEIVED = "com.marothiatechs.foregroundservice.action.sos_received";;
     }
 
     public interface NOTIFICATION_ID {
