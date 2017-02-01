@@ -116,6 +116,14 @@ public class MainActivity extends AppCompatActivity{
                     startHelper.setClassName("com.caduceusintel.silverlinkhelper", "com.caduceusintel.silverlinkhelper.MainActivity");
                     startActivity(startHelper);
                 }
+            } else if (intent.getAction().equals(Constants.NOTIFICATION_ID.SOS_FOUND)) {
+                Button b = (Button) findViewById(R.id.button_SOS_cancel);
+                b.setText("SOS Signal Detected\nClick to confirm");
+                b.setClickable(true);
+            } else if (intent.getAction().equals(Constants.NOTIFICATION_ID.SOS_CONFIRMED)) {
+                Button b = (Button) findViewById(R.id.button_SOS_cancel);
+                b.setText("No SOS Signal");
+                b.setClickable(false);
             }
         }
 
@@ -193,16 +201,6 @@ public class MainActivity extends AppCompatActivity{
         }
 //        mQueue = Volley.newRequestQueue(this);
         if (!IS_SERVICE_RUNNING) {
-//            ConnectivityManager connMgr = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
-//            NetworkInfo netInfo = connMgr.getActiveNetworkInfo();
-//            while (netInfo == null || !netInfo.isConnected()) {
-//                try {
-//                    Thread.sleep(3000);
-//                } catch (InterruptedException e) {
-//                    e.printStackTrace();
-//                }
-//                netInfo = connMgr.getActiveNetworkInfo();
-//            }
             WifiManager wm = (WifiManager) getSystemService(Context.WIFI_SERVICE);
             wm.setWifiEnabled(true);
             try {
@@ -390,11 +388,15 @@ public class MainActivity extends AppCompatActivity{
         setContentView(R.layout.activity_main);
         Button button = (Button) findViewById(R.id.button1);
         button.setText("Stop Service");
+        Button btn_SOS = (Button) findViewById(R.id.button_SOS_cancel);
+        btn_SOS.setText("No SOS Signal");
 
         broadcastreceiver = new MyReceiver();
         IntentFilter intentfilter = new IntentFilter();
         intentfilter.addAction(Constants.NOTIFICATION_ID.BROADCAST_TAG);
         intentfilter.addAction(DownloadManager.ACTION_DOWNLOAD_COMPLETE);
+        intentfilter.addAction(Constants.NOTIFICATION_ID.SOS_FOUND);
+        intentfilter.addAction(Constants.NOTIFICATION_ID.SOS_CONFIRMED);
         registerReceiver(broadcastreceiver, intentfilter);
     }
 

@@ -96,7 +96,6 @@ public class ForegroundService extends Service implements ServiceConnection, Bea
     private HashSet<UUID> filterServiceUuids;
     private ArrayList<ScanFilter> api21ScanFilters;
     private final static UUID[] serviceUuids;
-    private final static UUID SOSUuid;
     private static ExecutorService dataPool;
     private static ExecutorService heartbeatPool;
     public boolean keepAlive = false;
@@ -125,7 +124,6 @@ public class ForegroundService extends Service implements ServiceConnection, Bea
                 MetaWearBoard.METAWEAR_SERVICE_UUID,
                 MetaWearBoard.METABOOT_SERVICE_UUID
         };
-        SOSUuid = Constants.NOTIFICATION_ID.SOS;
         dataPool = Executors.newCachedThreadPool();
         heartbeatPool = Executors.newCachedThreadPool();
     }
@@ -762,9 +760,6 @@ public class ForegroundService extends Service implements ServiceConnection, Bea
 
     }
 
-    @TargetApi(22)
-    private void scanSOS(long interval) {}
-
     @Override
     public void onBeaconServiceConnect() {
         beaconManager.addRangeNotifier(new RangeNotifier() {
@@ -779,8 +774,10 @@ public class ForegroundService extends Service implements ServiceConnection, Bea
 
                     if (SENSOR_MAC.indexOf(mac) != -1) {
                         BodyLogBoard bdb = (BodyLogBoard) boards.get(0);
-                        if (bdb.SOS_flag == 0) {
+                        if (bdb.SOS_flag == 0 || bdb.SOS_flag == 3) {
                             bdb.SOS_flag = 1;
+                            Intent intent = new Intent(Constants.NOTIFICATION_ID.SOS_FOUND);
+                            sendBroadcast(intent);
                         }
                     }
                 }

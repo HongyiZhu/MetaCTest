@@ -35,16 +35,17 @@ public class Constants {
     }
 
     public interface ACTION {
-        String MAIN_ACTION = "com.marothiatechs.foregroundservice.action.main";
-        String INIT_ACTION = "com.marothiatechs.foregroundservice.action.init";
-        String STARTFOREGROUND_ACTION = "com.marothiatechs.foregroundservice.action.startforeground";
-        String STOPFOREGROUND_ACTION = "com.marothiatechs.foregroundservice.action.stopforeground";
-        String SOS_RECEIVED = "com.marothiatechs.foregroundservice.action.sos_received";;
+        String MAIN_ACTION = "com.silverlink.cic.action.main";
+        String INIT_ACTION = "com.silverlink.cic.action.init";
+        String STARTFOREGROUND_ACTION = "com.silverlink.cic.action.startforeground";
+        String STOPFOREGROUND_ACTION = "com.silverlink.cic.action.stopforeground";
+        String SOS_RECEIVED = "com.silverlink.cic.action.sos_received";;
     }
 
     public interface NOTIFICATION_ID {
         int FOREGROUND_SERVICE = 101;
-        String BROADCAST_TAG = "com.marothiatechs.foregroundservice.action.broadcast";
-        UUID SOS = UUID.fromString("67A1586A-9AFC-11E6-9F33-A24FC0D9649C");
+        String BROADCAST_TAG = "com.silverlink.cic.notification.broadcast";
+        String SOS_FOUND = "con.silverlink.cic.notification.sos_found";
+        String SOS_CONFIRMED = "com.silverlink.cic.notification.sos_confirmed";
     }
 }

@@ -1,5 +1,6 @@
 package com.example.hongyi.foregroundtest;
 
+import android.content.Intent;
 import android.util.Log;
 
 import com.mbientlab.metawear.AsyncOperation;
@@ -169,6 +170,12 @@ public class BodyLogBoard extends Board{
                             .setFallTime((short) 1400)
                             .commit();
                     led_module.play(true);
+                    SOS_flag = 3;
+
+                    Intent intent = new Intent(Constants.NOTIFICATION_ID.SOS_CONFIRMED);
+                    service.sendBroadcast(intent);
+                } else if (SOS_flag == 3) {
+                    led_module.stop(true);
                     SOS_flag = 0;
                 }
 

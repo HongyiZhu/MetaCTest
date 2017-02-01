@@ -264,6 +264,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="63dp"
             android:id="@+id/button_SOS_cancel"
+            android:clickable="false"
             android:onClick="SOS_received"
             android:layout_below="@+id/Status_5"
             android:layout_centerHorizontal="true" />
