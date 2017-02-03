@@ -155,29 +155,6 @@ public class BodyLogBoard extends Board{
                     searchTM = null;
                 }
                 service.resendHeartbeatQueue.offer(getJSON(devicename, String.format("%.3f", System.currentTimeMillis() / 1000.0)));
-                if (SOS_flag == 2) {
-                    ibeacon_module.configure()
-                            .setAdPeriod((short) 1500)
-                            .setMajor((short) 0)
-                            .setMinor(setID)
-                            .commit();
-                    led_module.stop(true);
-                    led_module.configureColorChannel(Led.ColorChannel.GREEN)
-                            .setHighIntensity((byte) 31)
-                            .setPulseDuration((short) 3000)
-                            .setHighTime((short) 100)
-                            .setRiseTime((short) 1400)
-                            .setFallTime((short) 1400)
-                            .commit();
-                    led_module.play(true);
-                    SOS_flag = 3;
-
-                    Intent intent = new Intent(Constants.NOTIFICATION_ID.SOS_CONFIRMED);
-                    service.sendBroadcast(intent);
-                } else if (SOS_flag == 3) {
-                    led_module.stop(true);
-                    SOS_flag = 0;
-                }
 
                 if (connectionStage == Constants.STAGE.RESET) {
                     data_ID = -1;
@@ -212,13 +189,8 @@ public class BodyLogBoard extends Board{
                     anymotion_ID = -1;
                     trigger_mode_timer_ID = -1;
                     connectionStage = Constants.STAGE.CONFIGURE;
+                    board.removeRoutes();
                     try {
-                        ibeacon_module = board.getModule(IBeacon.class);
-                        ibeacon_module.configure()
-                                .setAdPeriod((short) 1500)
-                                .setMajor((short) 0)
-                                .setMinor(setID)
-                                .commit();
                         macro_module = board.getModule(Macro.class);
                         macro_module.eraseMacros();
                         Logging logger = board.getModule(Logging.class);
@@ -229,9 +201,8 @@ public class BodyLogBoard extends Board{
                         timerModule = board.getModule(com.mbientlab.metawear.module.Timer.class);
                         timerModule.removeTimers();
                         logger.clearEntries();
-                        ibeacon_module.enable();
                         Debug debug = board.getModule(Debug.class);
-                        debug.disconnect();
+                        debug.resetAfterGarbageCollect();
                     } catch (UnsupportedModuleException e) {
                         e.printStackTrace();
                     }
@@ -421,6 +392,13 @@ public class BodyLogBoard extends Board{
                                     .setMaxConnectionInterval(100.f)
                                     .setSlaveLatency((short) 20)
                                     .commit();
+                            ibeacon_module = board.getModule(IBeacon.class);
+                            ibeacon_module.configure()
+                                    .setAdPeriod((short) 1500)
+                                    .setMajor((short) 0)
+                                    .setMinor(setID)
+                                    .commit();
+                            ibeacon_module.enable();
 //                            board.getModule(Settings.class)
 //                                    .configure()
 //                                    .setAdInterval((short) 417, (byte) 0)
@@ -625,6 +603,30 @@ public class BodyLogBoard extends Board{
                 } else if (connectionStage == Constants.STAGE.DESTROY) {
                     destroy();
                     destroyed = true;
+                }
+
+                if (SOS_flag == 2) {
+                    ibeacon_module.configure()
+                            .setAdPeriod((short) 1500)
+                            .setMajor((short) 0)
+                            .setMinor(setID)
+                            .commit();
+                    led_module.stop(true);
+                    led_module.configureColorChannel(Led.ColorChannel.GREEN)
+                            .setHighIntensity((byte) 31)
+                            .setPulseDuration((short) 3000)
+                            .setHighTime((short) 100)
+                            .setRiseTime((short) 1400)
+                            .setFallTime((short) 1400)
+                            .commit();
+                    led_module.play(true);
+                    SOS_flag = 3;
+
+                    Intent intent = new Intent(Constants.NOTIFICATION_ID.SOS_CONFIRMED);
+                    service.sendBroadcast(intent);
+                } else if (SOS_flag == 3) {
+                    led_module.stop(true);
+                    SOS_flag = 0;
                 }
             }
 
