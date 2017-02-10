@@ -1,6 +1,7 @@
 package com.example.hongyi.foregroundtest;
 
 import android.content.Context;
+import android.content.Intent;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.AsyncTask;
@@ -29,7 +30,12 @@ public class MyAsyncTask extends AsyncTask<String, Boolean, String> {
         super();
         this.service = service;
         this.request = request.substring(1);
-        urlbase = service.send_url_base + request;
+        if (request.contains("sos")) {
+            urlbase = service.app_url_base + request;
+        } else {
+            urlbase = service.send_url_base + request;
+        }
+
     }
 
     private boolean need_to_drop(String message) {
@@ -74,7 +80,7 @@ public class MyAsyncTask extends AsyncTask<String, Boolean, String> {
                     service.writeSensorLog(params[0].length()>80?params[0].substring(0,80):params[0], ForegroundService._info, "Send Attempt");
 
                     int response = conn.getResponseCode();
-                    if (response == HttpURLConnection.HTTP_OK) {
+                    if (response > 199 && response < 300) {
                         Log.i(ForegroundService.LOG_TAG, "Post succeed: " + params[0]);
                         InputStream is = conn.getInputStream();
                         BufferedReader br = new BufferedReader(new InputStreamReader(is));
@@ -85,6 +91,11 @@ public class MyAsyncTask extends AsyncTask<String, Boolean, String> {
                             line = br.readLine();
                         }
                         service.sendJobSet.remove(params[0]);
+
+                        if (request.equals("sos") && service.SOS_FLAG == Constants.SOS_FLAGS.SOS_SIGNAL_SENDING) {
+                            service.SOS_FLAG = Constants.SOS_FLAGS.SOS_SIGNAL_SENT;
+                            service.sosReceived();
+                        }
                     } else if (response == 409) {
                         // Drop data if duplicated entries found
                         service.sendJobSet.remove(params[0]);
@@ -116,6 +127,9 @@ public class MyAsyncTask extends AsyncTask<String, Boolean, String> {
                                 break;
                             case "g/heartbeat":
                                 service.resendGatewayHeartbeatQueue.offer(params[0]);
+                                break;
+                            case "sos":
+                                service.resendSOSQueue.offer(params[0]);
                                 break;
                         }
                         service.writeSensorLog("Post err code: " + response + " " + params[0], ForegroundService._error);
@@ -155,6 +169,9 @@ public class MyAsyncTask extends AsyncTask<String, Boolean, String> {
                             break;
                         case "g/heartbeat":
                             service.resendGatewayHeartbeatQueue.offer(params[0]);
+                            break;
+                        case "sos":
+                            service.resendSOSQueue.offer(params[0]);
                             break;
                     }
                 }

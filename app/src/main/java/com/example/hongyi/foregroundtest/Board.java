@@ -75,6 +75,10 @@ public class Board {
         batteryTS = 0;
     }
 
+    public String getName() {
+        return devicename;
+    }
+
     public void check_and_reconnect(long currentTS) {
         if (connectionFeedbackTS + rotationInterval < currentTS) {
             long interval = rotationInterval - (currentTS - rotationMarkTS) % (rotationInterval);

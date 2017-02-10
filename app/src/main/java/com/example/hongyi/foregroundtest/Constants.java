@@ -23,6 +23,16 @@ public class Constants {
         long SCAN_DISCONNECT_MS = 1000 * 60 * 10;
     }
 
+    public interface SOS_FLAGS {
+        int NO_SOS_FOUND = 0;
+        int SOS_FOUND = 1;
+        int SOS_SIGNAL_SENDING = 2;
+        int SOS_SIGNAL_SENT = 3;
+        int SOS_CONFIRM_RECEIVED = 4;
+        int SOS_CONFIRM_SENDING_TO_BOARD = 5;
+        int SOS_CONFIRM_SENT_TO_BOARD = 6;
+    }
+
     public interface STAGE {
         int INIT = 0;
         int CONFIGURE = 1;

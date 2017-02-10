@@ -79,6 +79,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class ForegroundService extends Service implements ServiceConnection, BeaconConsumer{
+    public int SOS_FLAG;
     public Set<String> sendJobSet;
     public Queue<String> resendDataQueue = new ConcurrentLinkedQueue<>();
     public Queue<String> resendBatteryQueue = new ConcurrentLinkedQueue<>();
@@ -87,6 +88,7 @@ public class ForegroundService extends Service implements ServiceConnection, Bea
     public Queue<String> resendVersionQueue = new ConcurrentLinkedQueue<>();
     public Queue<String> resendGatewayVersionQueue = new ConcurrentLinkedQueue<>();
     public Queue<String> resendGatewayHeartbeatQueue = new ConcurrentLinkedQueue<>();
+    public Queue<String> resendSOSQueue = new ConcurrentLinkedQueue<>();
     private File log_file;
     public static final String LOG_TAG = "ForegroundService", LOG_ERR = "http_err", _info = "INF";
     public static final String _success = "SUC", _error = "ERR";
@@ -106,6 +108,7 @@ public class ForegroundService extends Service implements ServiceConnection, Bea
     private Timer gatewayHeartbeatTM;
     private Set<String> nearByDevices;
     public String send_url_base;
+    public String app_url_base;
     public int wifiReset_report = 0;
     private WifiRestarter wr;
     private BluetoothAdapter.LeScanCallback deprecatedScanCallback= null;
@@ -142,6 +145,7 @@ public class ForegroundService extends Service implements ServiceConnection, Bea
     @Override
     public void onCreate() {
         super.onCreate();
+        SOS_FLAG = Constants.SOS_FLAGS.NO_SOS_FOUND;
         phoneID = ((TelephonyManager) getSystemService(TELEPHONY_SERVICE)).getDeviceId();
         PackageInfo pinfo = null;
         try {
@@ -173,6 +177,24 @@ public class ForegroundService extends Service implements ServiceConnection, Bea
         return jsonstring.toString();
     }
 
+    private String getSOSJSON(String name) {
+        JSONObject jsonstring = new JSONObject();
+        BodyLogBoard bdb = (BodyLogBoard) boards.get(0);
+        String mac = bdb.getName();
+
+        try {
+            jsonstring.put("g", name);
+            jsonstring.put("s", mac);
+            jsonstring.put("t", System.currentTimeMillis() / 1000.0);
+            jsonstring.put("sos", "T");
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+        Log.i("SOS", jsonstring.toString());
+
+        return jsonstring.toString();
+    }
+
     private String getFormattedTime() {
         SimpleDateFormat sdfDate = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");//dd/MM/yyyy
         Date now = new Date();
@@ -200,6 +222,29 @@ public class ForegroundService extends Service implements ServiceConnection, Bea
             } catch (IOException e) {
                 e.printStackTrace();
             }
+        }
+    }
+
+    public void sosReceived() {
+        SOS_FLAG = Constants.SOS_FLAGS.SOS_CONFIRM_RECEIVED;
+        BodyLogBoard bdb = (BodyLogBoard) boards.get(0);
+        SOS_FLAG = Constants.SOS_FLAGS.SOS_CONFIRM_SENDING_TO_BOARD;
+        if (bdb.SOS_flag == 1) {
+            bdb.SOS_flag = 2;
+            bdb.board.disconnect();
+            try {
+                Thread.sleep(5000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            bdb.reconnectTM.cancel();
+            bdb.reconnectTM.purge();
+            bdb.reconnectTM = new java.util.Timer();
+            bdb.sensor_status = bdb.CONNECTING;
+            bdb.broadcastStatus();
+            writeSensorLog("Try to connect", _info, bdb.devicename);
+            bdb.rotationMarkTS = System.currentTimeMillis();
+            bdb.board.connect();
         }
     }
 
@@ -236,24 +281,7 @@ public class ForegroundService extends Service implements ServiceConnection, Bea
 
         if (intent != null) {
             if (intent.getAction().equals(Constants.ACTION.SOS_RECEIVED)) {
-                BodyLogBoard bdb = (BodyLogBoard) boards.get(0);
-                if (bdb.SOS_flag == 1) {
-                    bdb.SOS_flag = 2;
-                    bdb.board.disconnect();
-                    try {
-                        Thread.sleep(5000);
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-                    bdb.reconnectTM.cancel();
-                    bdb.reconnectTM.purge();
-                    bdb.reconnectTM = new java.util.Timer();
-                    bdb.sensor_status = bdb.CONNECTING;
-                    bdb.broadcastStatus();
-                    writeSensorLog("Try to connect", _info, bdb.devicename);
-                    bdb.rotationMarkTS = System.currentTimeMillis();
-                    bdb.board.connect();
-                }
+                sosReceived();
             } else if (intent.getAction().equals(Constants.ACTION.STARTFOREGROUND_ACTION)) {
                 if (SENSOR_MAC.size() == 0) {
                     SENSOR_MAC.add(intent.getStringExtra("A"));
@@ -264,6 +292,7 @@ public class ForegroundService extends Service implements ServiceConnection, Bea
                 }
                 setID = intent.getShortExtra("setID", (short) 0);
                 send_url_base = intent.getStringExtra("send_url");
+                app_url_base = intent.getStringExtra("app_host_url");
                 Log.i(LOG_TAG, "Received Start Foreground Intent");
 //            writeSensorLog("Received Start Foreground Intent", _info);
                 showNotification();
@@ -283,6 +312,7 @@ public class ForegroundService extends Service implements ServiceConnection, Bea
                 String res = br.readLine();
                 JSONObject js = new JSONObject(res);
                 send_url_base = js.getString("send_url");
+                app_url_base = js.getString("app_host_url");
                 JSONArray jsonarr = js.getJSONArray("sensors");
                 Map<String, String> hm = new HashMap<>();
                 for (int i = 0; i < jsonarr.length(); i++) {
@@ -584,6 +614,15 @@ public class ForegroundService extends Service implements ServiceConnection, Bea
                     postGatewayHeartbeatAsync task = new postGatewayHeartbeatAsync(service);
                     task.executeOnExecutor(heartbeatPool, data);
                 }
+                if (!resendSOSQueue.isEmpty()) {
+                    String data = resendSOSQueue.poll();
+                    Log.i("SOS", "Fetched SOS from queue");
+                    postSOSAsync task = new postSOSAsync(service);
+                    if (service.SOS_FLAG == Constants.SOS_FLAGS.SOS_FOUND) {
+                        service.SOS_FLAG = Constants.SOS_FLAGS.SOS_SIGNAL_SENDING;
+                    }
+                    task.executeOnExecutor(heartbeatPool, data);
+                }
             }
         }, 0, 500);
 
@@ -773,11 +812,17 @@ public class ForegroundService extends Service implements ServiceConnection, Bea
                     Log.e("iBeacon", "SOS Received from: " + mac);
 
                     if (SENSOR_MAC.indexOf(mac) != -1) {
-                        BodyLogBoard bdb = (BodyLogBoard) boards.get(0);
-                        if (bdb.SOS_flag == 0 || bdb.SOS_flag == 3) {
-                            bdb.SOS_flag = 1;
-                            Intent intent = new Intent(Constants.NOTIFICATION_ID.SOS_FOUND);
-                            sendBroadcast(intent);
+                        if (SOS_FLAG == Constants.SOS_FLAGS.NO_SOS_FOUND ||
+                                SOS_FLAG == Constants.SOS_FLAGS.SOS_CONFIRM_SENT_TO_BOARD) {
+                            SOS_FLAG = Constants.SOS_FLAGS.SOS_FOUND;
+                            BodyLogBoard bdb = (BodyLogBoard) boards.get(0);
+                            if (bdb.SOS_flag == 0 || bdb.SOS_flag == 3) {
+                                bdb.SOS_flag = 1;
+                                Intent intent = new Intent(Constants.NOTIFICATION_ID.SOS_FOUND);
+                                sendBroadcast(intent);
+                                resendSOSQueue.offer(getSOSJSON(phoneID));
+                                break;
+                            }
                         }
                     }
                 }
@@ -794,4 +839,6 @@ public class ForegroundService extends Service implements ServiceConnection, Bea
         }
 
     }
+
+
 }

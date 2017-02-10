@@ -632,6 +632,9 @@ public class BodyLogBoard extends Board{
 
             @Override
             public void disconnected() {
+                if (service.SOS_FLAG == Constants.SOS_FLAGS.SOS_CONFIRM_SENDING_TO_BOARD) {
+                    service.SOS_FLAG = Constants.SOS_FLAGS.SOS_CONFIRM_SENT_TO_BOARD;
+                }
                 long interval = rotationInterval - (System.currentTimeMillis() - rotationMarkTS) % (rotationInterval);
                 futureConnectionTS = System.currentTimeMillis() + interval;
                 TimerTask reconnect = new TimerTask() {
