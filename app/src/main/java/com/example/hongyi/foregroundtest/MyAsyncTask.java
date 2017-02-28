@@ -32,6 +32,7 @@ public class MyAsyncTask extends AsyncTask<String, Boolean, String> {
         this.request = request.substring(1);
         if (request.contains("sos")) {
             urlbase = service.app_url_base + request;
+            Log.i("SOS", urlbase);
         } else {
             urlbase = service.send_url_base + request;
         }
@@ -55,6 +56,7 @@ public class MyAsyncTask extends AsyncTask<String, Boolean, String> {
         service.sendJobSet.add(params[0]);
         if (netInfo != null && netInfo.isConnected()) {
             try {
+                Log.i("http", urlbase);
                 URL url = new URL(urlbase);
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                 try {

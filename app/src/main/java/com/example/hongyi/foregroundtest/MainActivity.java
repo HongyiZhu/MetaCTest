@@ -226,6 +226,8 @@ public class MainActivity extends AppCompatActivity{
                         try {
                             JSONObject js = new JSONObject(res);
                             String send_url = js.getString("send_url");
+                            String app_url = js.getString("app_host_url");
+                            service.putExtra("app_host_url", app_url);
                             service.putExtra("send_url", send_url);
                             JSONArray jsonarr = js.getJSONArray("sensors");
                             short setID = 0;
